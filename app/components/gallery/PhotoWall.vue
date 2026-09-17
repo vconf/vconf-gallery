@@ -176,6 +176,7 @@ watch(() => props.photos.length, () => nextTick(syncLoaded))
           @open="openPhoto($event, photo.id)"
           @warm="warm(photo.id, photo.width / photo.height)"
           @load="markLoaded($event, photo.id)"
+          @ready="loaded.add(photo.id)"
         />
       </div>
     </template>
@@ -194,6 +195,7 @@ watch(() => props.photos.length, () => nextTick(syncLoaded))
         @open="openPhoto($event, photo.id)"
         @warm="warm(photo.id, photo.width / photo.height)"
         @load="markLoaded($event, photo.id)"
+        @ready="loaded.add(photo.id)"
       />
     </template>
   </div>

@@ -20,7 +20,23 @@ const emit = defineEmits<{
   open: [event: MouseEvent]
   warm: []
   load: [event: Event]
+  /** 掛載當下就已經載好了（快取命中、錯過 load 事件），不需要再等 decode */
+  ready: []
 }>()
+
+/**
+ * 掛載當下就先確認一次是不是已經載好了。
+ *
+ * 圖片若在 Vue 掛上 `@load` 之前就從快取回來（無限捲動新建的格子最常見），
+ * 那個事件不會再來，這張就會永遠停在 `opacity: 0`、只顯示模糊的 LQIP。
+ * 每個格子自己檢查，比在整面牆的層級定時掃可靠。
+ */
+const img = useTemplateRef<HTMLImageElement>('img')
+
+onMounted(() => {
+  if (img.value?.complete && img.value.naturalWidth > 0)
+    emit('ready')
+})
 </script>
 
 <template>
@@ -47,6 +63,7 @@ const emit = defineEmits<{
 
     <img
       v-if="cloudName"
+      ref="img"
       :src="photoUrl(cloudName, photo.id, 'h480')"
       :srcset="wallSrcSet(cloudName, photo.id)"
       :alt="photo.caption ?? ''"

@@ -103,7 +103,8 @@ export function stripSrcSet(cloudName: string, photoId: string): string {
  * —— 實測錯配時換一張要 1000~1500ms，命中時只要 45ms。
  */
 export function lightboxSizes(aspectRatio: number): string {
-  return `min(100vw, calc(100svh * ${aspectRatio.toFixed(4)}))`
+  // 8rem 是燈箱上下替控制項保留的空間；不扣掉會高估顯示寬度，挑到過大的候選
+  return `min(100vw, calc((100svh - 8rem) * ${aspectRatio.toFixed(4)}))`
 }
 
 /** 燈箱的 srcset 用 w 描述子，讓瀏覽器依實際顯示寬度挑 */
