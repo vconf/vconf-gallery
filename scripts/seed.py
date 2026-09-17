@@ -9,7 +9,7 @@
     python3 scripts/seed.py            # 產圖 + 上傳 + 寫出 seed.sql
     python3 scripts/seed.py --dry-run  # 只產圖，不上傳
 
-secret 從 macOS Keychain 讀，不吃命令列參數也不寫進檔案。
+cloud name 與 API key 從環境變數／.dev.vars 讀，secret 只從 macOS Keychain 讀（見 _cloudinary.py）。
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ import argparse
 import colorsys
 import hashlib
 import json
-import subprocess
 import sys
 import time
 import urllib.error
@@ -27,9 +26,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
-CLOUD = "nlmva1ui"
-API_KEY = "REDACTED"
-KEYCHAIN = ("cloudinary", "REDACTED")
+from _cloudinary import api_key, api_secret, cloud_name
+
 ASSET_ROOT = "2026 Vue 圖片畫廊"
 
 SOURCE = Path.home() / "Downloads" / "VCONF-teaser-dk-0-index-light.jpg"
@@ -44,16 +42,6 @@ ALBUMS = [
     ("group-photo", "大合照", "散場前的全體合照", "2026-10-17"),
 ]
 PER_ALBUM = 8
-
-
-def api_secret() -> str:
-    out = subprocess.run(
-        ["security", "find-generic-password", "-s", KEYCHAIN[0], "-a", KEYCHAIN[1], "-w"],
-        capture_output=True, text=True,
-    )
-    if out.returncode != 0:
-        sys.exit("讀不到 Keychain 裡的 Cloudinary secret")
-    return out.stdout.strip()
 
 
 def average_color(img: Image.Image) -> str:
@@ -114,13 +102,13 @@ def upload(path: Path, photo_id: str, album_slug: str, secret: str) -> dict:
         return f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode()
 
     body = b"".join(field(k, v) for k, v in params.items())
-    body += field("api_key", API_KEY) + field("signature", sign(params, secret))
+    body += field("api_key", api_key()) + field("signature", sign(params, secret))
     body += (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
              f'filename="{path.name}"\r\nContent-Type: image/jpeg\r\n\r\n').encode()
     body += path.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
 
     req = urllib.request.Request(
-        f"https://api.cloudinary.com/v1_1/{CLOUD}/image/upload",
+        f"https://api.cloudinary.com/v1_1/{cloud_name()}/image/upload",
         data=body,
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
     )

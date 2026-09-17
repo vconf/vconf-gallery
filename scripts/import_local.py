@@ -20,8 +20,6 @@ import hashlib
 import io
 import json
 import re
-import subprocess
-import sys
 import time
 import urllib.error
 import urllib.request
@@ -30,9 +28,8 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-CLOUD = "nlmva1ui"
-API_KEY = "REDACTED"
-KEYCHAIN = ("cloudinary", "REDACTED")
+from _cloudinary import api_key, api_secret, cloud_name
+
 ASSET_ROOT = "2026 Vue 圖片畫廊"
 
 MAX_EDGE = 2400
@@ -43,14 +40,6 @@ UPLOAD_WORKERS = 4
 MONTHS = {"四月": ("04", "四月"), "五月": ("05", "五月"), "六月": ("06", "六月"),
           "七月": ("07", "七月"), "八月": ("08", "八月")}
 PHOTO_DIR = "現場照片"
-
-
-def api_secret() -> str:
-    out = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN[0],
-                          "-a", KEYCHAIN[1], "-w"], capture_output=True, text=True)
-    if out.returncode != 0:
-        sys.exit("讀不到 Keychain 裡的 Cloudinary secret")
-    return out.stdout.strip()
 
 
 def sign(params: dict[str, str], secret: str) -> str:
@@ -96,13 +85,13 @@ def upload(data: bytes, name: str, photo_id: str, album_slug: str, secret: str) 
         return f'--{boundary}\r\nContent-Disposition: form-data; name="{k}"\r\n\r\n{v}\r\n'.encode()
 
     body = b"".join(field(k, v) for k, v in params.items())
-    body += field("api_key", API_KEY) + field("signature", sign(params, secret))
+    body += field("api_key", api_key()) + field("signature", sign(params, secret))
     body += (f'--{boundary}\r\nContent-Disposition: form-data; name="file"; '
              f'filename="{name}"\r\nContent-Type: image/jpeg\r\n\r\n').encode()
     body += data + f"\r\n--{boundary}--\r\n".encode()
 
     req = urllib.request.Request(
-        f"https://api.cloudinary.com/v1_1/{CLOUD}/image/upload", data=body,
+        f"https://api.cloudinary.com/v1_1/{cloud_name()}/image/upload", data=body,
         headers={"Content-Type": f"multipart/form-data; boundary={boundary}"})
     for attempt in range(3):
         try:
@@ -115,9 +104,9 @@ def upload(data: bytes, name: str, photo_id: str, album_slug: str, secret: str) 
 
 def purge_existing(secret: str) -> None:
     """清掉既有的 vconf/ 資產（種子測試圖），避免跟真照片混在一起。"""
-    url = f"https://api.cloudinary.com/v1_1/{CLOUD}/resources/image/upload?prefix=vconf/"
+    url = f"https://api.cloudinary.com/v1_1/{cloud_name()}/resources/image/upload?prefix=vconf/"
     req = urllib.request.Request(url, method="DELETE")
-    token = __import__("base64").b64encode(f"{API_KEY}:{secret}".encode()).decode()
+    token = __import__("base64").b64encode(f"{api_key()}:{secret}".encode()).decode()
     req.add_header("Authorization", f"Basic {token}")
     try:
         res = json.load(urllib.request.urlopen(req, timeout=120))

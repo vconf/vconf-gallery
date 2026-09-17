@@ -17,7 +17,8 @@ import subprocess
 import time
 import urllib.request
 
-CLOUD = "nlmva1ui"
+from _cloudinary import cloud_name
+
 TRANSFORMS = [
     "f_auto,q_auto:good,c_limit,h_320",
     "f_auto,q_auto:good,c_limit,h_640",
@@ -47,7 +48,7 @@ def photo_ids() -> list[str]:
 
 def warm(job: tuple[str, str, str]) -> float:
     pid, transform, accept = job
-    url = f"https://res.cloudinary.com/{CLOUD}/image/upload/{transform}/vconf/{pid}"
+    url = f"https://res.cloudinary.com/{cloud_name()}/image/upload/{transform}/vconf/{pid}"
     req = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "Mozilla/5.0"})
     started = time.time()
     try:
