@@ -54,7 +54,9 @@ const hasMore = computed(() => visible.value < (album.value?.photos.length ?? 0)
 
 useInfiniteScroll(
   () => (import.meta.client ? document : null),
-  () => (visible.value += PHOTO_PAGE_SIZE),
+  () => {
+    visible.value += PHOTO_PAGE_SIZE
+  },
   { distance: 800, canLoadMore: () => hasMore.value },
 )
 
