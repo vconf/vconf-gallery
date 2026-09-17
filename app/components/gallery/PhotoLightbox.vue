@@ -91,17 +91,35 @@ const sizes = computed(() =>
 )
 
 const ready = ref(false)
-watch(() => props.photo?.id, () => (ready.value = false))
 
-/** 同樣不做淡入：等 decode 完成直接換，避免兩層疊加造成的閃爍 */
-async function onLoad(event: Event) {
-  try {
-    await (event.target as HTMLImageElement).decode()
-  }
-  catch {}
+/** 等 decode 完成後直接換圖，但設 timeout 避免瀏覽器無限延後。 */
+async function markReady(img: HTMLImageElement) {
+  await Promise.race([
+    img.decode().catch(() => {}),
+    new Promise(resolve => setTimeout(resolve, 120)),
+  ])
 
-  ready.value = true
+  if (img === imgEl.value)
+    ready.value = true
 }
+
+async function onLoad(event: Event) {
+  await markReady(event.target as HTMLImageElement)
+}
+
+/** 補抓 hydration 前已載完的圖片，避免燈箱永久透明。 */
+async function syncReady() {
+  await nextTick()
+
+  if (imgEl.value?.complete && imgEl.value.naturalWidth > 0)
+    await markReady(imgEl.value)
+}
+
+watch(() => props.photo?.id, () => {
+  ready.value = false
+  void syncReady()
+}, { flush: 'post' })
+onMounted(syncReady)
 
 function go(id: string | null) {
   if (id)
