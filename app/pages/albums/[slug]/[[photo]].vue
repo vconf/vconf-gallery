@@ -2,7 +2,6 @@
 import type { PublicPhoto } from '#shared/types'
 import type { WallLayout } from '~/components/gallery/wallLayouts'
 import { useInfiniteScroll, useMediaQuery } from '@vueuse/core'
-import { loadPayload } from '#app'
 import { PHOTO_PAGE_SIZE, photoUrl } from '#shared/utils/photo'
 import { DEFAULT_WALL_LAYOUT, MOBILE_WALL_LAYOUT } from '~/components/gallery/wallLayouts'
 
@@ -72,7 +71,23 @@ watch([album, photoId], () => {
 }, { immediate: true })
 
 const all = computed(() => album.value?.photos ?? [])
-const index = computed(() => (photoId.value ? all.value.findIndex(p => p.id === photoId.value) : -1))
+
+/**
+ * 燈箱正在看哪一張，**由這個本地狀態決定，不是網址**。
+ *
+ * 原本直接讀 `route.params.photo`。單張照片是獨立的預渲染路由，網址要等 router 導頁 +
+ * 抓那一頁的 `_payload.json` 才更新 —— 導頁還沒完成時再按一次，算出來的 `nextId`
+ * 還是同一張，導到同一個網址，那次按鍵就被吞掉。實測連按 12 次：間隔 200ms 只前進 8 張、
+ * 80ms 只前進 4 張、30ms 只前進 2 張。
+ *
+ * 網址仍然會跟上（`selectPhoto` 用 replaceState），所以分享與重新整理不受影響。
+ */
+const activeId = ref<string | null>(null)
+watch(photoId, (id) => {
+  activeId.value = id
+}, { immediate: true })
+
+const index = computed(() => (activeId.value ? all.value.findIndex(p => p.id === activeId.value) : -1))
 const lightboxPhoto = computed(() => (index.value >= 0 ? all.value[index.value]! : null))
 /**
  * 前後張會繞一圈：最後一張再按下一張就回到第一張，反之亦然。
@@ -97,20 +112,6 @@ const warmupPhotos = computed(() => [wrapped(1), wrapped(-1), wrapped(2), wrappe
 const effectiveLayout = computed<WallLayout>(() => (isMobile.value ? MOBILE_WALL_LAYOUT : layout.value))
 const base = computed(() => `/albums/${slug.value}`)
 
-/**
- * 單張照片的網址是獨立的預渲染路由，所以換一張時 router 會去抓那一頁的 `_payload.json` ——
- * 沒先備好的話，每次切換都多等一個往返（實測本機 260~326ms，手機上就是「滑了一下才換」）。
- *
- * 只備前後各一張。照片牆上的每個 cell 都掛著 `no-prefetch`，那是刻意的：
- * 一次備 30 份 payload 是純粹的浪費，而真正會被走到的只有相鄰那兩張。
- */
-watch([prevId, nextId], ([prev, next]) => {
-  for (const id of [next, prev]) {
-    if (id)
-      void loadPayload(`${base.value}/${id}`)
-  }
-}, { immediate: true })
-
 const stripPhotos = computed(() =>
   all.value.slice(0, 12).map(photo => ({
     id: photo.id,
@@ -121,9 +122,20 @@ const stripPhotos = computed(() =>
 )
 
 function selectPhoto(id: string) {
-  // replace：瀏覽 20 張只留一筆 history，不是 20 筆。
-  // 這裡刻意不做轉場：換一張只要 44ms，套上形變反而讓人覺得變慢。
-  navigateTo(`${base.value}/${id}`, { replace: true })
+  // 先換畫面：本地狀態是同步的，連按多快都不會掉
+  activeId.value = id
+
+  /*
+   * 網址用 replaceState 跟上，不走 router。
+   *
+   * 換一張不需要任何伺服器資料 —— 整本相簿的照片早就在 `all` 裡了。走 router 只會去抓
+   * 那一頁的 `_payload.json`，那既是切換延遲的來源，也是連按會掉的原因。
+   *
+   * 一定要把 `history.state` 原封傳回去：closeLightbox 靠裡面的 `back` 判斷該 back
+   * 還是導回相簿，router 的捲動位置也存在同一個物件裡。
+   * 用 replace 而不是 push，維持原本「瀏覽 20 張只留一筆 history」的行為。
+   */
+  history.replaceState(history.state, '', `${base.value}/${id}`)
 }
 
 const transition = useViewTransition()
