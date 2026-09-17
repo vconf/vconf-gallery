@@ -1,18 +1,7 @@
 import { readFileSync } from 'node:fs'
 import tailwindcss from '@tailwindcss/vite'
 
-/**
- * 預渲染要走過的路徑：首頁與每一本相簿 —— 訪客會落地的就這些。
- *
- * **刻意不預渲染 178 個單張照片的網址。** 試過，代價比好處大：
- *   1. 每個照片頁都是獨立路由，從照片牆點開燈箱時 Nuxt 會去抓該路由的 `_payload.json`
- *      （整本相簿約 70~120KB），轉場得等它 —— 實測會觸發
- *      `TimeoutError: Transition was aborted because of timeout in DOM update`。
- *   2. build 產物從 1MB 膨脹到 24MB，因為每一頁都重覆嵌入整本相簿的資料。
- *
- * 不預渲染的話，從照片牆點開燈箱是**純前端、零網路請求**；而直接開單張照片網址
- * （分享連結、爬蟲抓 OG meta）會落到 Worker 做 SSR —— 那本來就是唯一需要伺服器的時機。
- */
+/** 所有公開網址都走 SSG，包含首頁、相簿與單張照片深連結。 */
 function galleryRoutes(): string[] {
   try {
     const albums = JSON.parse(readFileSync('server/assets/gallery.json', 'utf8')) as {
@@ -20,7 +9,13 @@ function galleryRoutes(): string[] {
       photos: { id: string }[]
     }[]
 
-    return ['/', ...albums.map(album => `/albums/${album.slug}`)]
+    return [
+      '/',
+      ...albums.flatMap(album => [
+        `/albums/${album.slug}`,
+        ...album.photos.map(photo => `/albums/${album.slug}/${photo.id}`),
+      ]),
+    ]
   }
   catch {
     // 快照還沒產生（例如第一次 clone）時就只預渲染首頁，不要讓 build 掛掉
