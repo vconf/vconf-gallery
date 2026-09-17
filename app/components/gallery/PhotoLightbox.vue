@@ -10,8 +10,8 @@ const props = defineProps<{
   /** 第幾張 / 共幾張，給位置指示用 */
   index: number
   total: number
-  /** 再往後幾張的 id。連按右鍵時才不會追過預抓 */
-  lookahead?: string[]
+  /** 依操作優先序排列的預抓照片。 */
+  warmupPhotos?: PublicPhoto[]
 }>()
 
 const emit = defineEmits<{
@@ -91,17 +91,35 @@ const sizes = computed(() =>
 )
 
 const ready = ref(false)
-watch(() => props.photo?.id, () => (ready.value = false))
 
-/** 同樣不做淡入：等 decode 完成直接換，避免兩層疊加造成的閃爍 */
-async function onLoad(event: Event) {
-  try {
-    await (event.target as HTMLImageElement).decode()
-  }
-  catch {}
+/** 等 decode 完成後直接換圖，但設 timeout 避免瀏覽器無限延後。 */
+async function markReady(img: HTMLImageElement) {
+  await Promise.race([
+    img.decode().catch(() => {}),
+    new Promise(resolve => setTimeout(resolve, 120)),
+  ])
 
-  ready.value = true
+  if (img === imgEl.value)
+    ready.value = true
 }
+
+async function onLoad(event: Event) {
+  await markReady(event.target as HTMLImageElement)
+}
+
+/** 補抓 hydration 前已載完的圖片，避免燈箱永久透明。 */
+async function syncReady() {
+  await nextTick()
+
+  if (imgEl.value?.complete && imgEl.value.naturalWidth > 0)
+    await markReady(imgEl.value)
+}
+
+watch(() => props.photo?.id, () => {
+  ready.value = false
+  void syncReady()
+}, { flush: 'post' })
+onMounted(syncReady)
 
 function go(id: string | null) {
   if (id)
@@ -145,24 +163,12 @@ watch(() => !!props.photo, (open) => {
 }, { immediate: true })
 onBeforeUnmount(() => (locked.value = false))
 
-/**
- * 預抓前後各一張。
- *
- * 用 srcset + sizes 讓瀏覽器自己挑，而不是寫死某一階 —— 寫死的話直式照片剛好猜中、
- * 橫式照片就猜錯，猜錯等於完全沒預抓。
- * 前後張的長寬比未知（本地陣列才有），所以用目前這張的比例當近似：同一本相簿裡
- * 相鄰照片多半是同一台相機、同一個方向。
- */
+/** 每張用自己的比例產生 sizes，確保預抓與燈箱選到同一個候選。 */
 const { warm } = usePhotoWarmup(cloudName)
 
-watch(() => [props.prevId, props.nextId, props.photo?.id], () => {
-  const ar = props.photo ? props.photo.width / props.photo.height : 1.5
-
-  // 順序就是重要性：下一張最先，再來上一張，最後才是更後面的
-  for (const id of [props.nextId, props.prevId, ...(props.lookahead ?? [])]) {
-    if (id)
-      warm(id, ar)
-  }
+watch(() => props.warmupPhotos, (photos) => {
+  for (const photo of photos ?? [])
+    warm(photo.id, photo.width / photo.height)
 }, { immediate: true })
 </script>
 
@@ -318,7 +324,7 @@ watch(() => [props.prevId, props.nextId, props.photo?.id], () => {
             底色與模糊跟關閉／左右鍵那幾顆一致，才像同一組控制項。
           -->
           <p class="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-3.5 py-1.5 text-[13px] leading-none tabular-nums text-paper ring-1 ring-white/15 backdrop-blur-md">
-            <span class="font-medium">{{ index + 1 }}</span>
+            <span>{{ index + 1 }}</span>
             <span class="mx-1 text-haze">/</span>
             <span class="text-haze">{{ total }}</span>
           </p>

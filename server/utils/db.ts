@@ -98,7 +98,7 @@ export const ALBUM_PREVIEW_COUNT = 6
 export async function listAlbumSummaries(db: D1Database, includeHidden = false): Promise<AlbumSummary[]> {
   const albumFilter = includeHidden ? '' : 'WHERE is_visible = 1'
 
-  const [albums, counts, previews] = await db.batch<any>([
+  const [albums, counts, previews] = await db.batch<AlbumRow | { album_id: string, n: number } | { album_id: string, id: string }>([
     db.prepare(`SELECT * FROM albums ${albumFilter} ORDER BY sort_order, created_at`),
     db.prepare('SELECT album_id, COUNT(*) AS n FROM photos WHERE is_visible = 1 GROUP BY album_id'),
     db.prepare(`
@@ -109,6 +109,9 @@ export async function listAlbumSummaries(db: D1Database, includeHidden = false):
       ) WHERE rn <= ?1
     `).bind(ALBUM_PREVIEW_COUNT),
   ])
+
+  if (!albums || !counts || !previews)
+    throw new Error('D1 album summary batch returned an incomplete result')
 
   const countBy = new Map<string, number>(
     (counts.results as { album_id: string, n: number }[]).map(r => [r.album_id, r.n]),

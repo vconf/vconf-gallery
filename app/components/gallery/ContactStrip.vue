@@ -87,6 +87,7 @@ const track = computed(() => [
         v-for="(photo, index) in track"
         :key="`${photo.id}-${index}`"
         :to="photo.href"
+        no-prefetch
         class="shot"
         :style="{ '--ar': photo.ar }"
         :tabindex="photo.clone ? -1 : undefined"
