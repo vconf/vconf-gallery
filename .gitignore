@@ -1,0 +1,21 @@
+# Nuxt
+.nuxt
+.output
+.nitro
+.cache
+dist
+
+# Node
+node_modules
+*.log
+
+# Cloudflare
+.wrangler
+.dev.vars
+# worker-configuration.d.ts 刻意「不」忽略：它是 binding 的型別來源，
+# 要跟著 wrangler.jsonc 一起進版控（`pnpm cf:typegen` 重新產生）。
+
+# Editor / OS
+.DS_Store
+.vscode
+.idea

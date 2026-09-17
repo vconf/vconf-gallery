@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/**
+ * Vconf Gallery 的 design token。
+ *
+ * 底色刻意取自 Vconf 官網的 dark token hsl(231 83% 5%)，是冷調藍黑而不是中性近黑，
+ * 這樣 Gallery 與官網在深色下是同一個色溫。
+ *
+ * --color-vue 與 --color-violet 只代表「狀態」（focus / 目前 / 已選 / 主要動作），
+ * 不得用來填滿面積 —— 照片以外的任何東西都不該比照片鮮豔。
+ */
+@theme {
+  --color-ink: #050814;
+  --color-ink-raised: #0d1226;
+  --color-paper: #eceff7;
+  --color-haze: #8c93ad;
+  --color-vue: #3ebf8f;
+  --color-violet: #863bff;
+
+  --font-display: "Instrument Serif", "Noto Serif TC", serif;
+  --font-sans: "Noto Sans TC", system-ui, sans-serif;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/**
+ * Tailwind v4 的 preflight 拿掉了「button 預設 cursor: pointer」那條規則，
+ * 所以不補這段的話全站按鈕都是箭頭游標，看起來不像可以點。
+ */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
+/* 焦點框是全站唯一一個綠色會固定出現的地方，不要移除 */
+:focus-visible {
+  outline: 2px solid var(--color-vue);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/**
+ * View Transitions
+ *
+ * 預設給整頁一個很短的淡入淡出。刻意只有 180ms —— 轉場是用來讓人知道「換了」，
+ * 不是表演；太長反而會讓每一次點擊都像在等。
+ */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: ease;
+}
+
+/**
+ * 被點開的那張照片會從照片牆的位置長成燈箱大圖（縮圖與大圖共用同一個
+ * view-transition-name，瀏覽器自己把兩者對應起來做形變）。
+ * 這一段要比整頁的淡入淡出久一點，形變才看得出來。
+ */
+::view-transition-old(photo),
+::view-transition-new(photo) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  /* 縮圖是 object-fit: cover、大圖是 contain，讓瀏覽器自己補這段差異 */
+  object-fit: cover;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
