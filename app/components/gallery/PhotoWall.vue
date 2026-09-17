@@ -2,6 +2,7 @@
 import type { PublicPhoto } from '#shared/types'
 import type { WallLayout } from './wallLayouts'
 import { useMediaQuery } from '@vueuse/core'
+import { loadPayload } from '#app'
 import { EAGER_PHOTO_COUNT } from '#shared/utils/photo'
 import { DEFAULT_WALL_LAYOUT } from './wallLayouts'
 
@@ -66,15 +67,37 @@ const masonryColumns = computed(() => {
 const transition = useViewTransition()
 
 /**
+ * 先把單張照片那一頁的 payload 備起來。
+ *
+ * `startViewTransition` 在 update callback 完成之前會把整頁凍結成靜態快照 ——
+ * 把 `await navigateTo()` 放進去，等於「網路來回的期間畫面完全不動」，冷的時候就是那個卡頓。
+ * 在 hover／focus／touchstart 就備好，點下去時導頁是從快取取用，一個 frame 就結束。
+ *
+ * 只備使用者真的碰到的那一張。cell 上的 `no-prefetch` 仍然有意義：
+ * 那會在每一格進入視窗時就抓，一次三十份是純浪費。
+ */
+async function warmPayload(photoId: string) {
+  try {
+    await loadPayload(`${props.basePath}/${photoId}`)
+  }
+  catch {
+    // 沒有 payload（例如那一頁沒被預渲染）就照常導頁，不影響功能
+  }
+}
+
+/**
  * 點縮圖：先把 view-transition-name 掛上去（舊快照才抓得到這一格），
  * 再在同一個轉場裡導頁。用 `<a>` 的 href 保留中鍵開新分頁與 SEO，所以只攔左鍵。
  */
-function openPhoto(event: MouseEvent, photoId: string) {
+async function openPhoto(event: MouseEvent, photoId: string) {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
     return
 
   event.preventDefault()
   morphId.value = photoId
+
+  // 備好才開始轉場（通常在 hover／touchstart 時就備完了，這裡是立刻回來的）
+  await warmPayload(photoId)
 
   transition(async () => {
     await nextTick()
@@ -84,6 +107,11 @@ function openPhoto(event: MouseEvent, photoId: string) {
 
 // 滑過就先抓那一張的燈箱大圖；空閒時再暖前幾張
 const { warm, warmFirst } = usePhotoWarmup(cloudName)
+
+function warmCell(photo: PublicPhoto) {
+  warm(photo.id, photo.width / photo.height)
+  void warmPayload(photo.id)
+}
 watch(() => props.photos, list => warmFirst(list), { immediate: true })
 
 // 捲動進場。首屏照片完全跳過，載入更多與換排列之後要重建
@@ -170,7 +198,7 @@ watch(() => props.photos.length, () => nextTick(syncLoaded))
           :loaded="loaded.has(photo.id)"
           :morph="morphName(photo.id) === 'photo'"
           @open="openPhoto($event, photo.id)"
-          @warm="warm(photo.id, photo.width / photo.height)"
+          @warm="warmCell(photo)"
           @load="markLoaded($event, photo.id)"
           @ready="loaded.add(photo.id)"
         />
@@ -189,7 +217,7 @@ watch(() => props.photos.length, () => nextTick(syncLoaded))
         :loaded="loaded.has(photo.id)"
         :morph="morphName(photo.id) === 'photo'"
         @open="openPhoto($event, photo.id)"
-        @warm="warm(photo.id, photo.width / photo.height)"
+        @warm="warmCell(photo)"
         @load="markLoaded($event, photo.id)"
         @ready="loaded.add(photo.id)"
       />

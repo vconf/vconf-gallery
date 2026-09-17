@@ -73,6 +73,18 @@ button:not(:disabled),
  * view-transition-name，瀏覽器自己把兩者對應起來做形變）。
  * 這一段要比整頁的淡入淡出久一點，形變才看得出來。
  */
+/**
+ * 燈箱形變期間，整頁不要跟著淡入淡出。
+ *
+ * 照片正在展開、背景同時在淡，看起來就是「整頁離場」而不是「這張照片放大了」——
+ * 那正是點開時那股卡頓感的來源。背景直接換成黑，讓形變自己說話。
+ * 真正換頁（首頁 ↔ 相簿）不帶這個標記，仍然保有上面那段 180ms 的淡入淡出。
+ */
+:root[data-view-transition="photo"]::view-transition-old(root),
+:root[data-view-transition="photo"]::view-transition-new(root) {
+  animation: none;
+}
+
 ::view-transition-old(photo),
 ::view-transition-new(photo) {
   animation-duration: 260ms;

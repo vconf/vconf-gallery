@@ -216,9 +216,18 @@ watch(() => props.warmupPhotos, (photos) => {
           aria-hidden="true"
         />
 
+        <!--
+          跟照片牆的縮圖共用 `view-transition-name: photo`，瀏覽器才知道這兩者是「同一張」，
+          會做形變而不是把縮圖當成「離場的元素」淡掉。
+
+          名字掛在舞台、不是大圖本身：大圖在 decode 完成前是 opacity 0，
+          拿它當新快照會形變成一片看不見的東西。舞台包住大圖與墊底縮圖，
+          盒子大小就是照片實際顯示的大小，而且裡面永遠有一張看得到的圖。
+        -->
         <div
           ref="stage"
           class="relative"
+          :style="{ viewTransitionName: 'photo' }"
         >
           <img
             :key="photo.id"
