@@ -318,7 +318,7 @@ watch(() => [props.prevId, props.nextId, props.photo?.id], () => {
             底色與模糊跟關閉／左右鍵那幾顆一致，才像同一組控制項。
           -->
           <p class="absolute bottom-5 left-1/2 -translate-x-1/2 rounded-full bg-black/45 px-3.5 py-1.5 text-[13px] leading-none tabular-nums text-paper ring-1 ring-white/15 backdrop-blur-md">
-            <span class="font-medium">{{ index + 1 }}</span>
+            <span>{{ index + 1 }}</span>
             <span class="mx-1 text-haze">/</span>
             <span class="text-haze">{{ total }}</span>
           </p>

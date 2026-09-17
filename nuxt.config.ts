@@ -110,8 +110,8 @@ export default defineNuxtConfig({
   fonts: {
     families: [
       { name: 'Instrument Serif', provider: 'google', weights: [400] },
-      { name: 'Noto Serif TC', provider: 'google', weights: [400, 600] },
-      { name: 'Noto Sans TC', provider: 'google', weights: [400, 500, 700] },
+      { name: 'Noto Serif TC', provider: 'google', weights: [400] },
+      { name: 'Noto Sans TC', provider: 'google', weights: [400] },
     ],
   },
 
