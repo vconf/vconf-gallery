@@ -22,6 +22,7 @@ const emit = defineEmits<{
 // runtime config 不會變，setup 當下取值即可；包成 computed 只會留著惰性求值的地雷
 const cloudName = useRuntimeConfig().public.cloudinaryCloudName
 const stage = ref<HTMLElement | null>(null)
+const overlay = ref<HTMLElement | null>(null)
 const imgEl = ref<HTMLImageElement | null>(null)
 
 /**
@@ -140,8 +141,13 @@ useEventListener(window, 'keydown', (e: KeyboardEvent) => {
   }
 })
 
-// 手機沒有左右鍵，改用滑動
-useSwipe(stage, {
+/**
+ * 手機沒有左右鍵，改用滑動。
+ *
+ * 綁在整個燈箱而不是照片本身：手機上照片只佔畫面中間一條（448 寬的螢幕上只有 299 高），
+ * 上下大片都是黑色 —— 只綁照片的話，滑在黑色區域完全沒反應，而使用者不會特地瞄準照片。
+ */
+useSwipe(overlay, {
   threshold: 48,
   onSwipeEnd(_e, direction) {
     if (direction === 'left')
@@ -187,6 +193,7 @@ watch(() => props.warmupPhotos, (photos) => {
     >
       <div
         v-if="photo"
+        ref="overlay"
         class="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black py-16"
         role="dialog"
         aria-modal="true"
@@ -251,7 +258,7 @@ watch(() => props.warmupPhotos, (photos) => {
         <div class="pointer-events-none fixed inset-0">
           <button
             type="button"
-            class="chrome-btn pointer-events-auto absolute size-10"
+            class="chrome-btn pointer-events-auto absolute grid size-10"
             :style="closePlacement"
             aria-label="關閉"
             @click="emit('close')"
@@ -341,8 +348,12 @@ watch(() => props.warmupPhotos, (photos) => {
  * 原本用 `bg-white/10`，疊在亮色照片上幾乎看不見 —— 活動照片有大量白牆與投影幕。
  * 改成深色半透明 + 細邊框 + blur（跟位置指示膠囊同一套），亮暗照片都讀得到。
  */
+/*
+ * 刻意不在這裡寫 display —— scoped style 會編成 `.chrome-btn[data-v-x]`，
+ * 特異性 (0,2,0) 高過 Tailwind 的 `.hidden` (0,1,0)，
+ * 會讓 `hidden md:grid` 完全失效（箭頭在手機上照樣出現）。display 一律由 utility 決定。
+ */
 .chrome-btn {
-  display: grid;
   place-items: center;
   border-radius: 9999px;
   background-color: rgb(0 0 0 / 45%);

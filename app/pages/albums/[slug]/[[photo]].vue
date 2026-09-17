@@ -2,6 +2,7 @@
 import type { PublicPhoto } from '#shared/types'
 import type { WallLayout } from '~/components/gallery/wallLayouts'
 import { useInfiniteScroll, useMediaQuery } from '@vueuse/core'
+import { loadPayload } from '#app'
 import { PHOTO_PAGE_SIZE, photoUrl } from '#shared/utils/photo'
 import { DEFAULT_WALL_LAYOUT, MOBILE_WALL_LAYOUT } from '~/components/gallery/wallLayouts'
 
@@ -95,6 +96,20 @@ const warmupPhotos = computed(() => [wrapped(1), wrapped(-1), wrapped(2), wrappe
 
 const effectiveLayout = computed<WallLayout>(() => (isMobile.value ? MOBILE_WALL_LAYOUT : layout.value))
 const base = computed(() => `/albums/${slug.value}`)
+
+/**
+ * 單張照片的網址是獨立的預渲染路由，所以換一張時 router 會去抓那一頁的 `_payload.json` ——
+ * 沒先備好的話，每次切換都多等一個往返（實測本機 260~326ms，手機上就是「滑了一下才換」）。
+ *
+ * 只備前後各一張。照片牆上的每個 cell 都掛著 `no-prefetch`，那是刻意的：
+ * 一次備 30 份 payload 是純粹的浪費，而真正會被走到的只有相鄰那兩張。
+ */
+watch([prevId, nextId], ([prev, next]) => {
+  for (const id of [next, prev]) {
+    if (id)
+      void loadPayload(`${base.value}/${id}`)
+  }
+}, { immediate: true })
 
 const stripPhotos = computed(() =>
   all.value.slice(0, 12).map(photo => ({
