@@ -1,4 +1,8 @@
-import type { Album, AlbumSummary, Photo, PublicPhoto } from '#shared/types'
+import type { Album, AlbumSummary, Photo, PreviewPhoto, PublicPhoto } from '#shared/types'
+
+interface PreviewRow extends PreviewPhoto {
+  album_id: string
+}
 
 /**
  * D1 的 row 是 snake_case、boolean 用 0/1，型別是 camelCase、boolean 用 true/false。
@@ -98,12 +102,12 @@ export const ALBUM_PREVIEW_COUNT = 6
 export async function listAlbumSummaries(db: D1Database, includeHidden = false): Promise<AlbumSummary[]> {
   const albumFilter = includeHidden ? '' : 'WHERE is_visible = 1'
 
-  const [albums, counts, previews] = await db.batch<AlbumRow | { album_id: string, n: number } | { album_id: string, id: string }>([
+  const [albums, counts, previews] = await db.batch<AlbumRow | { album_id: string, n: number } | PreviewRow>([
     db.prepare(`SELECT * FROM albums ${albumFilter} ORDER BY sort_order, created_at`),
     db.prepare('SELECT album_id, COUNT(*) AS n FROM photos WHERE is_visible = 1 GROUP BY album_id'),
     db.prepare(`
-      SELECT album_id, id FROM (
-        SELECT album_id, id,
+      SELECT album_id, id, width, height FROM (
+        SELECT album_id, id, width, height,
                ROW_NUMBER() OVER (PARTITION BY album_id ORDER BY sort_order, id) AS rn
         FROM photos WHERE is_visible = 1
       ) WHERE rn <= ?1
@@ -116,10 +120,11 @@ export async function listAlbumSummaries(db: D1Database, includeHidden = false):
   const countBy = new Map<string, number>(
     (counts.results as { album_id: string, n: number }[]).map(r => [r.album_id, r.n]),
   )
-  const previewBy = new Map<string, string[]>()
-  for (const r of previews.results as { album_id: string, id: string }[]) {
+  // strip 的每一張要在圖片載入前就算得出寬度，所以預覽也得帶尺寸
+  const previewBy = new Map<string, PreviewPhoto[]>()
+  for (const r of previews.results as PreviewRow[]) {
     const list = previewBy.get(r.album_id) ?? []
-    list.push(r.id)
+    list.push({ id: r.id, width: r.width, height: r.height })
     previewBy.set(r.album_id, list)
   }
 
@@ -130,7 +135,7 @@ export async function listAlbumSummaries(db: D1Database, includeHidden = false):
     eventDate: row.event_date,
     photoCount: countBy.get(row.id) ?? 0,
     // 封面沒設就退回該相簿排序最前的可見照片，前台不必特別處理空封面
-    coverPhotoId: row.cover_photo_id ?? previewBy.get(row.id)?.[0] ?? null,
-    previewPhotoIds: previewBy.get(row.id) ?? [],
+    coverPhotoId: row.cover_photo_id ?? previewBy.get(row.id)?.[0]?.id ?? null,
+    previewPhotos: previewBy.get(row.id) ?? [],
   }))
 }
