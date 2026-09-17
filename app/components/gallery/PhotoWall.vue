@@ -48,7 +48,7 @@ const columnCount = computed(() => (isMobile.value ? 2 : isTablet.value ? 3 : 4)
 const masonryColumns = computed(() => {
   const columns: { photo: PublicPhoto, index: number }[][]
     = Array.from({ length: columnCount.value }, () => [])
-  const heights = Array.from({ length: columnCount.value }).fill(0)
+  const heights = new Array<number>(columnCount.value).fill(0)
 
   for (const [index, photo] of props.photos.entries()) {
     let shortest = 0
