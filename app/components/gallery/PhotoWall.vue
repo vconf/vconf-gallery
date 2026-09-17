@@ -46,26 +46,22 @@ const isMobile = useMediaQuery('(max-width: 640px)')
 const columnCount = computed(() => (isMobile.value ? 2 : isTablet.value ? 3 : 4))
 
 const masonryColumns = computed(() => {
-  const columns: PublicPhoto[][] = Array.from({ length: columnCount.value }, () => [])
+  const columns: { photo: PublicPhoto, index: number }[][]
+    = Array.from({ length: columnCount.value }, () => [])
   const heights = Array.from({ length: columnCount.value }).fill(0)
 
-  for (const photo of props.photos) {
+  for (const [index, photo] of props.photos.entries()) {
     let shortest = 0
     for (let i = 1; i < heights.length; i++) {
       if (heights[i]! < heights[shortest]!)
         shortest = i
     }
-    columns[shortest]!.push(photo)
+    columns[shortest]!.push({ photo, index })
     heights[shortest]! += photo.height / photo.width
   }
 
   return columns
 })
-
-/** 給 masonry 用：算出這張在整體的序位，eager／fetchpriority 才不會全落在第一欄 */
-function orderOf(photo: PublicPhoto) {
-  return props.photos.indexOf(photo)
-}
 
 const transition = useViewTransition()
 
@@ -164,13 +160,13 @@ watch(() => props.photos.length, () => nextTick(syncLoaded))
         class="column"
       >
         <GalleryPhotoCell
-          v-for="photo in column"
+          v-for="{ photo, index } in column"
           :key="photo.id"
           :photo="photo"
           :href="`${basePath}/${photo.id}`"
           :cloud-name="cloudName"
-          :eager="orderOf(photo) < EAGER_PHOTO_COUNT"
-          :priority="orderOf(photo) < 2"
+          :eager="index < EAGER_PHOTO_COUNT"
+          :priority="index < 2"
           :loaded="loaded.has(photo.id)"
           :morph="morphName(photo.id) === 'photo'"
           @open="openPhoto($event, photo.id)"
