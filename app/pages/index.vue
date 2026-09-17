@@ -7,6 +7,8 @@ import type { AlbumSummary } from '#shared/types'
  */
 const { data: albums } = useFetch<AlbumSummary[]>('/api/albums')
 
+const { site } = useAppConfig()
+
 // contact sheet 拿各相簿最前面的幾張混成一條，代表「這個活動長什麼樣子」。
 // 每一張都連回它自己那本相簿的那張照片 —— 會動又不能點就只是裝飾。
 const stripPhotos = computed(() =>
@@ -20,10 +22,10 @@ const stripPhotos = computed(() =>
 )
 
 useSeoMeta({
-  title: 'v-conf Taiwan Gallery',
-  description: 'v-conf Taiwan 活動現場照片。',
-  ogTitle: 'v-conf Taiwan Gallery',
-  ogDescription: 'v-conf Taiwan 活動現場照片。',
+  title: site.name,
+  description: site.description,
+  ogTitle: site.name,
+  ogDescription: site.description,
 })
 </script>
 
@@ -36,7 +38,7 @@ useSeoMeta({
 
     <div class="mx-auto max-w-[1440px] px-4 md:px-6">
       <h1 class="sr-only">
-        v-conf Taiwan Gallery
+        {{ site.name }}
       </h1>
 
       <div v-if="albums?.length">

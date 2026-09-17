@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import type { PublicPhoto } from '#shared/types'
+import type { WallLayout } from './wallLayouts'
 import { useMediaQuery } from '@vueuse/core'
 import { EAGER_PHOTO_COUNT } from '#shared/utils/photo'
-
-export type WallLayout = 'justified' | 'masonry' | 'square'
+import { DEFAULT_WALL_LAYOUT } from './wallLayouts'
 
 const props = withDefaults(defineProps<{
   photos: PublicPhoto[]
   /** 相簿頁面路徑；點下去進燈箱（可選參數路由） */
   basePath: string
   layout?: WallLayout
-}>(), { layout: 'justified' })
+}>(), { layout: DEFAULT_WALL_LAYOUT })
 
 // runtime config 不會變，setup 當下取值即可；包成 computed 只會留著惰性求值的地雷
 const cloudName = useRuntimeConfig().public.cloudinaryCloudName

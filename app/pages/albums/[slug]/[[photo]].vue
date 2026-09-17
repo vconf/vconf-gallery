@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import type { PublicPhoto } from '#shared/types'
-import type { WallLayout } from '~/components/gallery/PhotoWall.vue'
+import type { WallLayout } from '~/components/gallery/wallLayouts'
 import { useInfiniteScroll, useMediaQuery } from '@vueuse/core'
 import { PHOTO_PAGE_SIZE, photoUrl } from '#shared/utils/photo'
+import { DEFAULT_WALL_LAYOUT, MOBILE_WALL_LAYOUT } from '~/components/gallery/wallLayouts'
 
 interface AlbumPayload {
   slug: string
@@ -31,12 +32,15 @@ const photoId = computed(() => (route.params.photo as string | undefined) || nul
  */
 const cloudName = useRuntimeConfig().public.cloudinaryCloudName
 
+// 同上：站台文案也要在 setup 當下取，才能安全地在 useSeoMeta 的 getter 裡用
+const { site } = useAppConfig()
+
 /**
  * 手機只給一種排列：螢幕窄時 justified 一列常常只放得下一張，右邊會留一大塊空白；
  * 而在那麼窄的畫面上提供三種排列，選項本身比差異還顯眼。等寬兩欄最乾淨。
  */
 const isMobile = useMediaQuery('(max-width: 640px)')
-const layout = ref<WallLayout>('justified')
+const layout = ref<WallLayout>(DEFAULT_WALL_LAYOUT)
 
 const { data: album } = useFetch<AlbumPayload>(() => `/api/albums/${slug.value}`)
 
@@ -86,7 +90,7 @@ const nextId = computed(() => wrapped(1))
 /** 往後再多備兩張：連按右鍵瀏覽是最常見的行為，只備一張會被追過。同樣會繞一圈 */
 const lookahead = computed(() => [wrapped(2), wrapped(3)].filter((id): id is string => !!id))
 
-const effectiveLayout = computed<WallLayout>(() => (isMobile.value ? 'masonry' : layout.value))
+const effectiveLayout = computed<WallLayout>(() => (isMobile.value ? MOBILE_WALL_LAYOUT : layout.value))
 const base = computed(() => `/albums/${slug.value}`)
 
 const stripPhotos = computed(() =>
@@ -121,10 +125,12 @@ function formatDate(date: string | null | undefined) {
   return date ? date.replaceAll('-', '.') : null
 }
 
+const pageTitle = () => (album.value ? `${album.value.name}｜${site.name}` : site.name)
+
 useSeoMeta({
-  title: () => (album.value ? `${album.value.name}｜v-conf Taiwan Gallery` : 'v-conf Taiwan Gallery'),
-  description: () => album.value?.description ?? 'v-conf Taiwan 活動現場照片。',
-  ogTitle: () => (album.value ? `${album.value.name}｜v-conf Taiwan Gallery` : 'v-conf Taiwan Gallery'),
+  title: pageTitle,
+  description: () => album.value?.description ?? site.description,
+  ogTitle: pageTitle,
   ogImage: () => {
     const id = photoId.value ?? album.value?.coverPhotoId
     return id ? photoUrl(cloudName, id, 'og') : undefined
