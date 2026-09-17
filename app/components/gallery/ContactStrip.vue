@@ -4,6 +4,13 @@ import { photoUrl, stripSrcSet } from '#shared/utils/photo'
 
 export interface StripPhoto {
   id: string
+  /**
+   * 長寬比（寬 / 高）。每張的高度固定，寬度由這個值決定。
+   *
+   * 一定要給：沒有它就得等圖片載入完才知道有多寬，而每一張載完都會把後面全部往右推 ——
+   * 實測那是相簿頁 0.18 / 首頁 0.13 的 CLS，畫面上就是頂端那條橫著抖一下。
+   */
+  ar: number
   /** 點下去要去哪 —— 相簿頁是同一本，首頁則各自回到自己那本 */
   href: string
   label: string
@@ -81,6 +88,7 @@ const track = computed(() => [
         :key="`${photo.id}-${index}`"
         :to="photo.href"
         class="shot"
+        :style="{ '--ar': photo.ar }"
         :tabindex="photo.clone ? -1 : undefined"
         :aria-hidden="photo.clone ? 'true' : undefined"
         :aria-label="photo.clone ? undefined : photo.label"
@@ -123,12 +131,15 @@ const track = computed(() => [
   display: block;
   height: 100%;
   flex: none;
+
+  /* 高度固定，寬度由長寬比推出來 —— 在圖片載入之前就定下來，才不會逐張推擠 */
+  aspect-ratio: var(--ar, 3 / 2);
   overflow: hidden;
 }
 
 .shot img {
   height: 100%;
-  width: auto;
+  width: 100%;
   object-fit: cover;
   transition: transform 0.5s ease-out;
 }

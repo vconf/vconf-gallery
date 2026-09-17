@@ -96,6 +96,7 @@ const base = computed(() => `/albums/${slug.value}`)
 const stripPhotos = computed(() =>
   all.value.slice(0, 12).map(photo => ({
     id: photo.id,
+    ar: photo.width / photo.height,
     href: `${base.value}/${photo.id}`,
     label: photo.caption ?? '放大檢視照片',
   })),

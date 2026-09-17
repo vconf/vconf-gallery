@@ -39,9 +39,9 @@ function formatDate(date: string | null) {
       aria-hidden="true"
     >
       <img
-        v-for="id in album.previewPhotoIds.slice(0, 5)"
-        :key="id"
-        :src="photoUrl(cloudName, id, 'h320')"
+        v-for="photo in album.previewPhotos.slice(0, 5)"
+        :key="photo.id"
+        :src="photoUrl(cloudName, photo.id, 'h320')"
         alt=""
         loading="lazy"
         decoding="async"

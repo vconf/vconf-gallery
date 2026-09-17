@@ -43,7 +43,7 @@ export async function albumSummaries(): Promise<AlbumSummary[]> {
     eventDate: album.eventDate,
     photoCount: album.photos.length,
     coverPhotoId: album.coverPhotoId,
-    previewPhotoIds: album.photos.slice(0, 6).map(photo => photo.id),
+    previewPhotos: album.photos.slice(0, 6).map(({ id, width, height }) => ({ id, width, height })),
   }))
 }
 

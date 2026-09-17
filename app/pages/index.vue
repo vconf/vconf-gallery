@@ -13,9 +13,10 @@ const { site } = useAppConfig()
 // 每一張都連回它自己那本相簿的那張照片 —— 會動又不能點就只是裝飾。
 const stripPhotos = computed(() =>
   (albums.value ?? []).flatMap(album =>
-    album.previewPhotoIds.slice(0, 4).map(id => ({
-      id,
-      href: `/albums/${album.slug}/${id}`,
+    album.previewPhotos.slice(0, 4).map(photo => ({
+      id: photo.id,
+      ar: photo.width / photo.height,
+      href: `/albums/${album.slug}/${photo.id}`,
       label: `${album.name}的照片`,
     })),
   ),

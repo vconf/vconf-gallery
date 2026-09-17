@@ -50,6 +50,13 @@ export interface AlbumDetail extends Album {
   photoCount: number
 }
 
+/** 目錄與 contact strip 用的最小照片資料 */
+export interface PreviewPhoto {
+  id: string
+  width: number
+  height: number
+}
+
 export interface AlbumSummary {
   slug: string
   name: string
@@ -57,8 +64,12 @@ export interface AlbumSummary {
   eventDate: string | null
   photoCount: number
   coverPhotoId: string | null
-  /** 相簿目錄那一列右側的縮圖 */
-  previewPhotoIds: string[]
+  /**
+   * 相簿目錄那一列右側的縮圖，以及首頁 contact strip 取材的來源。
+   * 帶著尺寸是因為 strip 的每一張高度固定、寬度由長寬比決定 ——
+   * 不先給比例的話，寬度要等圖片載入才確定，後面每一張都會被往右推一次。
+   */
+  previewPhotos: PreviewPhoto[]
 }
 
 export interface PhotoPage {
