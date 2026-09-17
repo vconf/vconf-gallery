@@ -39,6 +39,14 @@ export const WALL_LAYOUTS = [
 
 export type WallLayout = (typeof WALL_LAYOUTS)[number]['value']
 
+/**
+ * 排列偏好存在瀏覽器的哪個 key。
+ *
+ * 注意：相簿頁的 `onPrehydrate` 腳本裡**寫死了同一個字串** —— 那段會被序列化成
+ * inline script，讀不到模組範圍的變數。改這裡要一起改那裡。
+ */
+export const WALL_LAYOUT_STORAGE_KEY = 'vconf-gallery:layout'
+
 export const DEFAULT_WALL_LAYOUT: WallLayout = 'justified'
 
 /** 窄螢幕強制用的排列。是版型的物理限制，不是使用者偏好，所以不進 localStorage */

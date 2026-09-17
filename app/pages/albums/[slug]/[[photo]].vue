@@ -3,7 +3,7 @@ import type { PublicPhoto } from '#shared/types'
 import type { WallLayout } from '~/components/gallery/wallLayouts'
 import { useInfiniteScroll, useMediaQuery } from '@vueuse/core'
 import { PHOTO_PAGE_SIZE, photoUrl } from '#shared/utils/photo'
-import { DEFAULT_WALL_LAYOUT, MOBILE_WALL_LAYOUT } from '~/components/gallery/wallLayouts'
+import { DEFAULT_WALL_LAYOUT, isWallLayout, MOBILE_WALL_LAYOUT } from '~/components/gallery/wallLayouts'
 
 interface AlbumPayload {
   slug: string
@@ -40,7 +40,57 @@ const { site } = useAppConfig()
  * 而在那麼窄的畫面上提供三種排列，選項本身比差異還顯眼。等寬兩欄最乾淨。
  */
 const isMobile = useMediaQuery('(max-width: 640px)')
-const layout = ref<WallLayout>(DEFAULT_WALL_LAYOUT)
+/**
+ * 排列偏好在 hydration **之前**就要套用，否則畫面會先亮預設值再跳掉。
+ *
+ * 公開頁面是預渲染的靜態檔，所有人拿到同一份 HTML —— 伺服器不可能知道這個人選了什麼
+ * （cookie 也救不了，檔案是 build 時就產好的）。所以只能靠一段同步的 inline script：
+ * `onPrehydrate` 會把下面這個函式序列化後放在 </body> 之前，DOM 已經在、又還沒繪製。
+ *
+ * 實測沒有它時：重新載入相簿頁有 20ms 亮著預設值，
+ * 而深連結開單張照片再關閉，因為 hydration 較晚，那段長達 460ms。
+ *
+ * 這個函式**讀不到模組範圍的任何變數**（它是被字串化的），所以 key 與預設值都寫死在裡面。
+ */
+onPrehydrate(() => {
+  try {
+    const saved = localStorage.getItem('vconf-gallery:layout')
+
+    if (!saved || !['justified', 'masonry', 'square'].includes(saved))
+      return
+
+    document.documentElement.dataset.wallLayout = saved
+
+    // 切換器：選中的樣子綁在 aria-pressed 上，改屬性就等於改外觀
+    for (const button of document.querySelectorAll('[data-option]'))
+      button.setAttribute('aria-pressed', String((button as HTMLElement).dataset.option === saved))
+
+    /*
+     * 照片牆只在 justified ↔ square 之間直接換屬性就好 —— 這兩種是同一份 DOM、純 CSS 差異。
+     * masonry 的 DOM 不一樣（自己分欄的 .column），這裡硬改屬性只會得到一個壞掉的版面，
+     * 所以留給 Vue 在 hydration 時重建。
+     */
+    if (saved !== 'masonry') {
+      for (const wall of document.querySelectorAll('.wall'))
+        (wall as HTMLElement).dataset.layout = saved
+    }
+  }
+  catch {
+    // 無痕視窗、封鎖儲存空間：維持預設值即可
+  }
+})
+
+/** 上面那段腳本已經把偏好放到 `<html>` 上，setup 當下讀它，Vue 第一次渲染就是對的 */
+function initialLayout(): WallLayout {
+  if (!import.meta.client)
+    return DEFAULT_WALL_LAYOUT
+
+  const saved = document.documentElement.dataset.wallLayout
+
+  return isWallLayout(saved) ? saved : DEFAULT_WALL_LAYOUT
+}
+
+const layout = ref<WallLayout>(initialLayout())
 
 const { data: album } = useFetch<AlbumPayload>(() => `/api/albums/${slug.value}`)
 
