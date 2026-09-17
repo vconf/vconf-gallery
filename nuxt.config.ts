@@ -87,9 +87,10 @@ export default defineNuxtConfig({
     // 後台絕對不能被 prerender 成靜態檔（那會完全繞過驗證），也不該被索引或快取
     '/admin/**': {
       prerender: false,
-      index: false,
-      robots: false,
-      headers: { 'cache-control': 'no-store' },
+      headers: {
+        'cache-control': 'no-store',
+        'x-robots-tag': 'noindex, nofollow',
+      },
     },
     '/api/admin/**': { headers: { 'cache-control': 'no-store' } },
 
