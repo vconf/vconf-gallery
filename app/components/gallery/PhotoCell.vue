@@ -26,6 +26,7 @@ const emit = defineEmits<{
 <template>
   <NuxtLink
     :to="href"
+    no-prefetch
     class="cell"
     :style="{ '--ar': photo.width / photo.height, 'backgroundColor': photo.placeholderColor ?? '#0d1226' }"
     :aria-label="photo.caption ?? '放大檢視照片'"
