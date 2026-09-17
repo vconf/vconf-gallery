@@ -181,17 +181,31 @@ watch(() => [props.prevId, props.nextId, props.photo?.id], () => {
     >
       <div
         v-if="photo"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black py-16"
+        class="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black py-16"
         role="dialog"
         aria-modal="true"
         :aria-label="photo.caption ?? '照片檢視'"
-        @mousemove="revealChrome"
         @click.self="emit('close')"
       >
+        <!--
+          背景用同一張照片的 LQIP 放大鋪滿，再壓一層暗色。
+          LQIP 只有 20px 寬，放大本身就是模糊的，不需要 filter: blur()（那在大面積上很吃 GPU）。
+          資料已經在 payload 裡，零額外請求。
+        -->
+        <div
+          v-if="photo.placeholder"
+          class="pointer-events-none absolute inset-0 scale-110 bg-cover bg-center"
+          :style="{ backgroundImage: `url(${photo.placeholder})` }"
+          aria-hidden="true"
+        />
+        <div
+          class="pointer-events-none absolute inset-0 bg-black/65"
+          aria-hidden="true"
+        />
+
         <div
           ref="stage"
-          class="relative bg-cover bg-center"
-          :style="{ backgroundImage: photo.placeholder ? `url(${photo.placeholder})` : undefined }"
+          class="relative"
         >
           <img
             :key="photo.id"
