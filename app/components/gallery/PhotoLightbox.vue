@@ -10,8 +10,8 @@ const props = defineProps<{
   /** 第幾張 / 共幾張，給位置指示用 */
   index: number
   total: number
-  /** 再往後幾張的 id。連按右鍵時才不會追過預抓 */
-  lookahead?: string[]
+  /** 依操作優先序排列的預抓照片。 */
+  warmupPhotos?: PublicPhoto[]
 }>()
 
 const emit = defineEmits<{
@@ -145,24 +145,12 @@ watch(() => !!props.photo, (open) => {
 }, { immediate: true })
 onBeforeUnmount(() => (locked.value = false))
 
-/**
- * 預抓前後各一張。
- *
- * 用 srcset + sizes 讓瀏覽器自己挑，而不是寫死某一階 —— 寫死的話直式照片剛好猜中、
- * 橫式照片就猜錯，猜錯等於完全沒預抓。
- * 前後張的長寬比未知（本地陣列才有），所以用目前這張的比例當近似：同一本相簿裡
- * 相鄰照片多半是同一台相機、同一個方向。
- */
+/** 每張用自己的比例產生 sizes，確保預抓與燈箱選到同一個候選。 */
 const { warm } = usePhotoWarmup(cloudName)
 
-watch(() => [props.prevId, props.nextId, props.photo?.id], () => {
-  const ar = props.photo ? props.photo.width / props.photo.height : 1.5
-
-  // 順序就是重要性：下一張最先，再來上一張，最後才是更後面的
-  for (const id of [props.nextId, props.prevId, ...(props.lookahead ?? [])]) {
-    if (id)
-      warm(id, ar)
-  }
+watch(() => props.warmupPhotos, (photos) => {
+  for (const photo of photos ?? [])
+    warm(photo.id, photo.width / photo.height)
 }, { immediate: true })
 </script>
 

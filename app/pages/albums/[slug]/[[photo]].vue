@@ -81,14 +81,15 @@ function wrapped(offset: number) {
   if (index.value < 0 || n < 2)
     return null
 
-  return all.value[(index.value + offset + n) % n]!.id
+  return all.value[(index.value + offset + n) % n]!
 }
 
-const prevId = computed(() => wrapped(-1))
-const nextId = computed(() => wrapped(1))
+const prevId = computed(() => wrapped(-1)?.id ?? null)
+const nextId = computed(() => wrapped(1)?.id ?? null)
 
-/** 往後再多備兩張：連按右鍵瀏覽是最常見的行為，只備一張會被追過。同樣會繞一圈 */
-const lookahead = computed(() => [wrapped(2), wrapped(3)].filter((id): id is string => !!id))
+/** 依操作優先序預抓，每張都保留自己的長寬比，確保瀏覽器挑中正確候選。 */
+const warmupPhotos = computed(() => [wrapped(1), wrapped(-1), wrapped(2), wrapped(3)]
+  .filter((photo): photo is PublicPhoto => !!photo))
 
 const effectiveLayout = computed<WallLayout>(() => (isMobile.value ? MOBILE_WALL_LAYOUT : layout.value))
 const base = computed(() => `/albums/${slug.value}`)
@@ -205,7 +206,7 @@ useSeoMeta({
       :next-id="nextId"
       :index="index < 0 ? 0 : index"
       :total="album.photos.length"
-      :lookahead="lookahead"
+      :warmup-photos="warmupPhotos"
       @close="closeLightbox"
       @select="selectPhoto"
     />
