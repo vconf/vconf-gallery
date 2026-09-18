@@ -36,8 +36,18 @@ const GAP = 20
 const BUTTON = 48
 const EDGE = 16
 
-const { left: imgLeft, right: imgRight, top: imgTop } = useElementBounding(imgEl)
+/*
+ * 量舞台，不量大圖。
+ *
+ * 舞台的盒子現在就等於照片顯示出來的大小（見下方 .stage），而且它**不會被重建** ——
+ * 大圖帶著 `:key="photo.id"`，每換一張都是新元素，量它的話 ResizeObserver 要重新觀察，
+ * 連按時會有幾幀量到 0，控制項就跟著閃掉。
+ */
+const { left: imgLeft, right: imgRight, top: imgTop } = useElementBounding(stage)
 const { width: viewportWidth } = useWindowSize()
+
+/** 照片的盒子量到了沒。量不到時所有位置都會算成畫面中央 */
+const chromeReady = computed(() => imgRight.value > imgLeft.value)
 
 const arrowLeft = computed(() => `${Math.max(EDGE, imgLeft.value - GAP - BUTTON)}px`)
 const arrowRight = computed(() =>
@@ -226,8 +236,8 @@ watch(() => props.warmupPhotos, (photos) => {
         -->
         <div
           ref="stage"
-          class="relative"
-          :style="{ viewTransitionName: 'photo' }"
+          class="stage relative"
+          :style="{ '--ar': photo.width / photo.height, 'viewTransitionName': 'photo' }"
         >
           <img
             :key="photo.id"
@@ -238,7 +248,7 @@ watch(() => props.warmupPhotos, (photos) => {
             :alt="photo.caption ?? ''"
             :width="photo.width"
             :height="photo.height"
-            class="block h-auto max-h-[calc(100svh-8rem)] w-auto max-w-full object-contain"
+            class="block size-full object-contain"
             :class="ready ? 'opacity-100' : 'opacity-0'"
             decoding="async"
             fetchpriority="high"
@@ -264,7 +274,17 @@ watch(() => props.warmupPhotos, (photos) => {
         刻意「常駐不自動隱藏」—— 會自己消失的控制項讓人不確定還能不能操作，
         而且要再動一次滑鼠才找得回來。半透明底 + backdrop blur 已經夠安靜，不會跟照片搶。
       -->
-        <div class="pointer-events-none fixed inset-0">
+        <!--
+          量到照片之前不要顯示控制項。
+          位置是從照片的 bounding box 推出來的，量到 0 的話左右箭頭與叉叉會全部擠到畫面正中央。
+          舞台現在載入前就有盒子，所以這一關通常在第一個 layout frame 就過了 ——
+          它是保險，不是延遲。
+        -->
+        <div
+          v-show="chromeReady"
+          class="pointer-events-none fixed inset-0 transition-opacity duration-150"
+          :class="chromeReady ? 'opacity-100' : 'opacity-0'"
+        >
           <button
             type="button"
             class="chrome-btn pointer-events-auto absolute grid size-10"
@@ -351,6 +371,22 @@ watch(() => props.warmupPhotos, (photos) => {
 </template>
 
 <style scoped>
+/*
+ * 舞台在照片載入**之前**就要有確定的大小。
+ *
+ * 大圖用的是 `w-auto h-auto`（第 8 條：有 width/height 屬性時，只寫 max-* 不會等比縮小），
+ * 但 `width: auto` 也讓屬性的尺寸提示失效 —— 資源還沒回來時只剩長寬比、沒有任何一邊是確定值，
+ * 算出來就是 0。舞台是 flex item、寬度由內容決定，於是整條鏈都塌成 0：
+ * 墊底縮圖跟著看不見，控制項也因為量到 0 而全部擠到畫面中央。
+ *
+ * 這裡直接用照片比例把盒子定出來，算式與 object-contain 的結果相同：
+ * 寬度 = min(可用寬度, 可用高度 × 長寬比)。上下的 8rem 是 py-16 留給控制項的空間。
+ */
+.stage {
+  width: min(100%, calc((100svh - 8rem) * var(--ar)));
+  aspect-ratio: var(--ar);
+}
+
 /**
  * 燈箱上的控制項。
  *
