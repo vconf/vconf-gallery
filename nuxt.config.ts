@@ -30,8 +30,6 @@ export default defineNuxtConfig({
   modules: [
     '@nuxt/fonts',
     '@vueuse/nuxt',
-    // 讓 `nuxt dev` 也拿得到 wrangler.jsonc 裡的 D1 / R2 / Images binding
-    'nitro-cloudflare-dev',
   ],
 
   css: ['~/assets/css/main.css'],
@@ -57,14 +55,14 @@ export default defineNuxtConfig({
   experimental: { viewTransition: true },
 
   nitro: {
-    preset: 'cloudflare_module',
+    // 不寫死 preset：在 Vercel 上 build 時 Nitro 會自動偵測成 `vercel`，
+    // 本機 `pnpm build && pnpm preview` 則是 node-server，兩邊都能直接跑。
 
     /**
-     * 公開頁面全部預渲染成靜態檔。
+     * 公開頁面全部預渲染成靜態檔，由 Vercel 的 CDN 直接送出，不喚醒 Function。
      *
-     * 量測依據：SSR 頁面的 TTFB 是 0.74~1.84s，靜態檔是 0.43s，而 Worker 的 CPU 只有 5ms ——
-     * 多出來的時間幾乎都在「喚醒 Worker + 查 D1 的來回」。預渲染之後由 Workers Assets 直接送出，
-     * 完全不喚醒 Worker，也不計入每日 10 萬請求的額度。
+     * 量測依據（Cloudflare 時期）：SSR 頁面的 TTFB 是 0.74~1.84s，靜態檔是 0.43s ——
+     * 多出來的時間幾乎都在「喚醒伺服器 + 查資料的來回」。
      *
      * 代價：內容改了要重新 build。現在後台還沒做、內容只有匯入腳本會動，所以代價是零。
      */
@@ -89,13 +87,10 @@ export default defineNuxtConfig({
     },
     '/api/admin/**': { headers: { 'cache-control': 'no-store' } },
 
-    // 公開內容改動不頻繁。workers.dev 沒有 zone、CDN 不會幫忙快取，
-    // 所以這裡的收益全在瀏覽器端：重複瀏覽不必每次都叫醒 Worker
-    // （免費方案每日只有 10 萬次請求）。60 秒夠短，後台改完很快就看得到。
+    // 公開內容改動不頻繁，讓瀏覽器重複瀏覽時不必每次都回源。60 秒夠短，後台改完很快就看得到。
     //
-    // 已知現況：以下規則只對「頁面」生效。Nitro 會把 /api/** 的回應蓋回 no-cache，
-    // 在 handler 裡用 setResponseHeader 也一樣被蓋掉（實測過）。影響不大 ——
-    // 貴的是 HTML 與圖片，API 只是幾 KB 的 JSON；等日後有自訂網域時一併重新處理。
+    // 已知現況（Cloudflare 時期實測，搬到 Vercel 後尚未重新驗證）：以下規則只對「頁面」生效，
+    // Nitro 會把 /api/** 的回應蓋回 no-cache。影響不大 —— 貴的是 HTML 與圖片，API 只是幾 KB 的 JSON。
     '/': { headers: { 'cache-control': 'public, max-age=60, stale-while-revalidate=300' } },
     '/albums/**': { headers: { 'cache-control': 'public, max-age=60, stale-while-revalidate=300' } },
     '/api/albums': { headers: { 'cache-control': 'public, max-age=60, stale-while-revalidate=300' } },
@@ -112,12 +107,12 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    // 全部由 `wrangler secret put` 提供，不進 repo
+    // 全部由 Vercel 專案的環境變數（NUXT_ 前綴）提供，不進 repo
     googleClientId: '',
     googleClientSecret: '',
     sessionSecret: '',
     adminEmails: '', // 逗號分隔
-    // Cloudinary 的 secret 只用來在 Worker 內產上傳簽章與刪除資產，絕不外流到瀏覽器
+    // Cloudinary 的 secret 只用來在伺服器端產上傳簽章與刪除資產，絕不外流到瀏覽器
     cloudinaryApiKey: '',
     cloudinaryApiSecret: '',
     public: {
@@ -125,7 +120,7 @@ export default defineNuxtConfig({
       /**
        * cloud name 本來就會出現在每個圖片 URL 裡，是公開資訊，所以直接給預設值。
        *
-       * 不能只靠 wrangler.jsonc 的 vars：那是**執行時**的環境變數，而預渲染跑在 Node 裡讀不到，
+       * 不能只靠部署平台的執行時環境變數：預渲染在 build 階段跑，讀不到只在執行時才有的值，
        * 結果會是預渲染的 HTML 一張圖都沒有（`v-if="cloudName"` 為 false）。
        * 環境變數仍可在執行時覆蓋。
        */

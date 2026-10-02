@@ -1,9 +1,9 @@
 /**
  * 把 D1 的內容倒成一份快照，給 build 時的預渲染用。
  *
- * 為什麼需要：預渲染跑在 Node 裡，沒有 Cloudflare 的 D1 binding，查不到資料。
- * 所以 build 之前先用 wrangler 從正式 D1 撈一份 JSON 放進 server/assets/，
- * 預渲染與執行時都讀它。
+ * 為什麼需要：網站部署在 Vercel，碰不到 D1，預渲染查不到資料。
+ * 所以匯入新照片後在本機跑這支，用 wrangler 從正式 D1 撈一份 JSON 放進 server/assets/ 並 commit；
+ * Vercel build 與執行時都讀那份檔案（Vercel 上沒有 wrangler 登入，build 不能自己去撈）。
  *
  * 代價講明白：**內容改了要重新 build 才會反映**。現在後台還沒做、內容只有匯入腳本會動，
  * 所以這個代價是零；等後台上線要嘛把相簿頁改回 SSR、要嘛在發布時觸發重建。

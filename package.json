@@ -8,14 +8,12 @@
   },
   "scripts": {
     "dev": "nuxt dev",
-    "build": "node scripts/snapshot.mjs && nuxt build",
+    "build": "nuxt build",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "typecheck": "nuxt typecheck",
-    "deploy": "nuxt build && wrangler deploy",
-    "cf:typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply vconf-gallery --local",
     "db:migrate": "wrangler d1 migrations apply vconf-gallery --remote",
     "snapshot": "node scripts/snapshot.mjs"
@@ -32,15 +30,9 @@
     "@antfu/eslint-config": "^9.5.1",
     "@tailwindcss/vite": "^4.3.3",
     "eslint": "^9.0.0",
-    "nitro-cloudflare-dev": "^0.2.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.6.0",
     "vue-tsc": "^3.3.11",
     "wrangler": "^4.133.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "nitropack": "2.13.4"
-    }
   }
 }

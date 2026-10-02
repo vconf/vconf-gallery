@@ -1,40 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "v-conf-gallery",
-  "main": "./.output/server/index.mjs",
-  "compatibility_date": "2026-09-17",
-  "compatibility_flags": ["nodejs_compat"],
 
-  "assets": {
-    "directory": "./.output/public",
-    "binding": "ASSETS",
-
-    // 預設是 auto-trailing-slash：/albums/2026-06 會被 307 轉到 /albums/2026-06/，
-    // 多一次完整來回（實測 0.25s → 0.49s，把預渲染省下來的時間吐回去一半）。
-    // 站內連結一律是無斜線的形式，所以讓無斜線就是正式網址、直接送檔案。
-    "html_handling": "drop-trailing-slash",
-
-    // 找不到的路徑要落到 Worker（單張照片的網址沒有預渲染，需要 SSR 出 OG meta）
-    "not_found_handling": "none"
-  },
-
-  "observability": {
-    "enabled": true
-  },
-
-  // cloud name 會出現在每一個圖片 URL 裡，本來就是公開資訊，可以進版控。
-  // API key / secret 走 `wrangler secret put`，絕不寫在這裡。
-  "vars": {
-    "NUXT_PUBLIC_CLOUDINARY_CLOUD_NAME": "nlmva1ui"
-  },
-
-  // 沒有 R2、沒有 Images binding：圖片存在 Cloudinary，由它的 CDN 直接送給訪客，
-  // 完全不經過這個 Worker。這同時解掉三件事——
-  //   1. 不用綁信用卡（R2 啟用一定要綁，Cloudinary Free 不用）
-  //   2. workers.dev 沒有 zone，Cache API 失效，我們自己當圖片伺服器會沒有 CDN 快取
-  //   3. 每日 10 萬請求的額度不會被縮圖吃掉（一頁 30 張圖原本就是 31 次請求）
+  // 網站本身部署在 Vercel，這份設定已經不負責部署。
   //
-  // 因此也不需要開 Workers Cache：這個 Worker 現在只出 HTML 與 JSON。
+  // 留著它只因為 D1 仍是內容的真相來源：`scripts/snapshot.mjs`、`scripts/warm_transforms.py`
+  // 與 `pnpm db:migrate` 都靠 `wrangler d1 ... vconf-gallery` 找到這個資料庫，
+  // 而 wrangler 是從這裡的 d1_databases 依名稱對應的。
+  "name": "v-conf-gallery",
+  "compatibility_date": "2026-09-17",
 
   "d1_databases": [
     {

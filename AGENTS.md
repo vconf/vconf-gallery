@@ -7,22 +7,29 @@
 ## 這是什麼
 
 **v-conf-gallery** —— Vconf Taiwan 的活動照片 Gallery，獨立於官網（`v-conf.vue.tw`，另一個 repo、Nuxt 3 + Vercel）之外。
-Nuxt 4 + Tailwind v4，跑在一個 Cloudflare Worker 上（SSR + JSON API + OAuth 端點），metadata 在 D1，
-**照片本身在 Cloudinary**，由它的 CDN 直接送給訪客，完全不經過這個 Worker。
+Nuxt 4 + Tailwind v4，部署在 **Vercel**（公開頁面預渲染成靜態檔，單張照片深連結與 JSON API 走 Vercel Function），
+**照片本身在 Cloudinary**，由它的 CDN 直接送給訪客，完全不經過我們的伺服器。
 規模：5~15 個相簿、300~1000 張照片，活動後一次批次上傳 100~500 張。
+
+GitHub repo `vconf/vconf-gallery` 已連上 Vercel 專案 `vconf-gallery`：push 到 `main` 即部署正式站
+（`https://vconf-gallery.vercel.app`），其他分支產生 Preview。
+
+內容的真相來源仍是 **Cloudflare D1**，但它只在本機的匯入流程裡用到，網站執行時完全不碰：
+匯入腳本 → 套進 D1 → `pnpm snapshot` 倒成 `server/assets/gallery.json` → commit → Vercel build 讀這份檔案。
+Vercel 上沒有 wrangler 登入，所以 **build 不會自己去撈 D1**，忘了跑 snapshot 就是部署舊內容。
 
 完整規劃在 `~/.claude/plans/vconf-taiwan-gallery-lexical-leaf.md`。
 
 ## 指令
 
 ```bash
-pnpm dev                 # Nuxt dev（nitro-cloudflare-dev 會載入 wrangler.jsonc 的 bindings）
-pnpm build               # 產出 .output
+pnpm dev                 # Nuxt dev
+pnpm build               # 本機產出 .output（node-server）；在 Vercel 上會自動偵測成 vercel preset
 pnpm lint / lint:fix
-pnpm cf:typegen          # 改過 wrangler.jsonc 後重新產生 worker-configuration.d.ts
+pnpm snapshot            # 從正式 D1 倒出 server/assets/gallery.json（需要 wrangler 登入，只在本機跑）
 pnpm db:migrate:local    # 套用 migrations 到本機 D1
 pnpm db:migrate          # 套用到正式 D1
-pnpm deploy              # build + wrangler deploy
+vercel deploy            # 手動部署 Preview（平常 push 就會自動部署，加 --prod 是正式站）
 ```
 
 Node 20+、pnpm。沒有測試框架。
@@ -31,15 +38,16 @@ Node 20+、pnpm。沒有測試框架。
 
 這些不是風格偏好，是查證過官方限制後的結論。改動前請先讀對應理由。
 
-### 1. 圖片不經過這個 Worker
+### 1. 圖片不經過我們的伺服器
 
 `<img>` 直接指向 `res.cloudinary.com`，URL 一律用 `shared/utils/photo.ts` 的 `photoUrl()` 組。
 **不要**做 `/img/...` 之類的代理路由。
 
-理由有三，缺一都不足以推翻：
-1. R2 要啟用必須綁信用卡，這個專案的前提是不綁。
-2. 沒有自訂網域就沒有 zone，`caches.default`（Cache API）在 `*.workers.dev` 上**不會運作** —— 我們自己當圖片伺服器會完全沒有 CDN 快取。Cloudinary 自帶 CDN。
-3. Workers Free 每日 10 萬請求。一頁 30 張縮圖走自家路由就是 31 次請求；走 Cloudinary 只剩 1 次。
+理由：
+1. Cloudinary 自帶 CDN 與即時轉檔，額度與 Vercel 分開計算。圖片若改走 Vercel（代理路由或 Vercel Image Optimization），
+   流量與 Function 呼叫都會吃 Vercel Hobby 的月額度，而圖片正是流量的大宗。
+2. 一頁 30 張縮圖走自家路由就是 31 次請求；走 Cloudinary 只剩 1 次。
+3. 不用綁信用卡是這個專案的前提（當初在 Cloudflare 也是因此不用 R2）。
 
 流量（bandwidth）是這個方案唯一會撞的額度，所以 transformation 一律帶 `q_auto:good`，不要改成 `q_auto:best`。
 
@@ -88,8 +96,8 @@ srcset 必須一模一樣，否則不會命中瀏覽器快取、墊底圖自己�
 - **`useRuntimeConfig()` 要在 setup 當下取值，不能包成 computed 再給 `useSeoMeta` 的 getter 用。**
   computed 是惰性的，第一次被讀到會是在 head 求值階段，那時已經離開 instance context。
   而且那個分支只在 `photoId` 有值時才執行，所以相簿頁一切正常、只有單張照片 500 —— 極難發現。
-- **`runtimeConfig.public` 要有預設值，不能只靠 `wrangler.jsonc` 的 vars。**
-  那是執行時的環境變數，預渲染跑在 Node 裡讀不到 —— 結果是預渲染的 HTML 一張圖都沒有。
+- **`runtimeConfig.public` 要有預設值，不能只靠部署平台的執行時環境變數。**
+  預渲染在 build 階段跑，只在執行時才有的值它讀不到 —— 結果是預渲染的 HTML 一張圖都沒有。
 
 ### 6. Masonry 自己分欄，不用 CSS `columns`
 
@@ -184,8 +192,8 @@ CSS 多欄會在內容變動時**重新平衡整個版面** —— 捲到底追�
 注意 `f_auto` 會依 `Accept` 產生**不同的衍生檔**（AVIF 與 WebP 是兩份），所以兩種都要暖。
 
 不需要定期重暖：官方文件寫明「transformation 在產生新衍生檔時才計數，對同一個 URL 的重複請求不計數」。
-也**不要**想用 Worker cron 做這件事 —— Free 每次 invocation 只有 50 個 subrequest，
-完整暖一次要 1,424 個 URL。
+也**不要**想用 cron（Vercel Cron 或任何 serverless 排程）做這件事 —— 完整暖一次要 1,424 個 URL，
+本機一次跑完就好，沒有重複執行的必要。
 
 ### 12. `.cell` 絕對不准寫死 `height`
 
@@ -202,9 +210,9 @@ CSS 多欄會在內容變動時**重新平衡整個版面** —— 捲到底追�
 
 **不准用 `INSERT OR REPLACE`** —— 它在 SQLite 是 DELETE + INSERT，重試會把已編輯好的說明與排序清成上傳時的預設值。
 
-`sort_order` 由**前端**指定（上傳前跟 album 要一次 base offset，然後 `base + index * 1000`）。Worker 不准讀 `MAX(sort_order)`：並行上傳時 4 條會讀到同一個值而撞號。
+`sort_order` 由**前端**指定（上傳前跟 album 要一次 base offset，然後 `base + index * 1000`）。伺服器不准讀 `MAX(sort_order)`：並行上傳時 4 條會讀到同一個值而撞號。
 
-上傳是**瀏覽器直傳 Cloudinary**：Worker 只負責產簽章（`/api/admin/uploads/signature`），檔案 bytes 不經過 Worker。
+上傳是**瀏覽器直傳 Cloudinary**：伺服器只負責產簽章（`/api/admin/uploads/signature`），檔案 bytes 不經過伺服器。
 `public_id` 固定是 `vconf-gallery/{photoId}`，所以重試會覆蓋同一個資產，不會累積孤兒。
 Cloudinary 上傳成功後，瀏覽器才呼叫 `/api/admin/photos` 寫 D1 —— 有 D1 那列就代表資產存在。
 
@@ -212,21 +220,22 @@ Cloudinary 上傳成功後，瀏覽器才呼叫 `/api/admin/photos` 寫 D1 —�
 
 拖拉後只送**那一張**的新位置，值取前後鄰居的中點（所以 `sort_order` 是 `REAL`）。
 
-理由：D1 Free 每次 invocation 只有 **50 個 query**、每個 query 只有 **100 個 bound parameter**。送 500 張的完整順序陣列，不論拆成 500 個 statement 還是一條 `UPDATE ... CASE WHEN`（1000 個參數），兩條路都會撞牆。
+理由（以 D1 為後台資料庫的前提；後台還沒做，換資料庫時要重新檢查這條）：D1 Free 每次 invocation 只有 **50 個 query**、每個 query 只有 **100 個 bound parameter**。送 500 張的完整順序陣列，不論拆成 500 個 statement 還是一條 `UPDATE ... CASE WHEN`（1000 個參數），兩條路都會撞牆。
 
 ### 15. Admin 是 deny-by-default，不靠路徑前綴
 
-每一個碰 D1 / R2 的 admin handler **第一行**都是 `await requireAdmin(event)`。`server/middleware/00.auth.ts` 只負責 UX（把未登入的 `/admin/**` 導去登入頁），不是防線。
+每一個碰資料庫的 admin handler **第一行**都是 `await requireAdmin(event)`。`server/middleware/00.auth.ts` 只負責 UX（把未登入的 `/admin/**` 導去登入頁），不是防線。
 
 理由：Nuxt 有不在 `/admin` 前綴下的端點 —— `/__nuxt_island/<Component>?props=...` 完全在外面；`_payload.json` 的路徑與 trailing slash 行為會隨版本變；prerender crawler 若爬進 `/admin`，HTML 會被建成靜態檔，連 middleware 都不會經過（所以 `nuxt.config.ts` 的 `routeRules` 對 `/admin/**` 關掉 prerender）。
 
-session cookie 一律用 **`__Host-` 前綴**：`workers.dev` 在 PSL 上，但 `<account>.workers.dev` 是可註冊的，若設了 `Domain`，你帳號下其他所有 Worker 都讀得到這個 admin cookie。
+session cookie 一律用 **`__Host-` 前綴**：它強制 `Secure`、`Path=/` 且不能設 `Domain`，cookie 只屬於這一個 host。
+`vercel.app` 在 PSL 上，但同一個網域下還有每次部署的 Preview 子網域，不鎖 host 的話 admin cookie 的範圍會比你以為的大。
 
-### 16. binding 只能從 `server/utils/cf.ts` 取
+### 16. 網站執行時不准依賴 Cloudflare
 
-全專案唯一碰 `event.context.cloudflare` 的地方。這個 Worker 只有 `DB`（D1）一個 binding。Nitro v2 的路徑是 `event.context.cloudflare.env`，v3 會改成 `event.req.runtime.cloudflare.env`；`package.json` 因此用 `pnpm.overrides` 鎖住 `nitropack`。
-
-binding 只在請求生命週期內存在，**不准在模組頂層取用**。
+部署已經搬到 Vercel，執行時拿不到任何 Cloudflare binding。`wrangler.jsonc` 只剩 `d1_databases`，
+存在的唯一目的是讓本機的 `wrangler d1 ...`（`snapshot.mjs`、`warm_transforms.py`、`db:migrate`）依名稱找到資料庫。
+不要再把 Worker 的設定（`main`、`assets`、`vars`）加回去，也不要在 server 程式裡讀 `event.context.cloudflare`。
 
 ### 17. EXIF 在瀏覽器端就要清掉
 
@@ -247,9 +256,11 @@ canvas 重新編碼本來就會洗掉所有 EXIF，而我們上傳的就是 canv
 
 ## 交付方式：SSG
 
-公開頁面（首頁、每一本相簿）全部預渲染成靜態檔，由 Workers Assets 直接送出 ——
-不喚醒 Worker，也不計入每日 10 萬請求。實測 TTFB 從 0.61~0.69s 降到 0.42s，
-而 0.42s 就是靜態檔的地板（favicon 也是 0.43s），代表伺服器端成本已經歸零。
+公開頁面（首頁、每一本相簿）全部預渲染成靜態檔，由 Vercel CDN 直接送出，不喚醒 Function。
+（Cloudflare 時期實測 TTFB 從 0.61~0.69s 降到 0.42s，0.42s 就是靜態檔的地板。）
+
+`/albums/x` 與 `/albums/x/` 都直接回 200、沒有轉址 —— Nitro 的 vercel preset 會用 `overrides` 把
+`albums/x/index.html` 對應到無斜線路徑。站內連結一律用無斜線形式。
 
 資料來自 `server/assets/gallery.json`（`scripts/snapshot.mjs` 從 D1 產生）。
 **改了內容要重新 build 才會反映** —— 現在後台還沒做，內容只有匯入腳本會動，所以代價是零；
@@ -257,7 +268,7 @@ canvas 重新編碼本來就會洗掉所有 EXIF，而我們上傳的就是 canv
 
 **單張照片的網址刻意不預渲染。** 試過 178 頁，代價比好處大：每頁都是獨立路由，
 點開燈箱時要抓該路由的 `_payload.json`（70~120KB），而且 build 產物從 1MB 膨脹到 24MB。
-不預渲染的話，從照片牆點開燈箱是純前端零請求；直接開分享連結才落到 Worker 做 SSR，
+不預渲染的話，從照片牆點開燈箱是純前端零請求；直接開分享連結才落到 Vercel Function 做 SSR，
 那本來就是唯一需要伺服器算 OG meta 的時機。
 
 ## View Transitions
@@ -277,18 +288,16 @@ Nuxt 的自動轉場**只用在真的換頁**（首頁 ↔ 相簿）。同一本
 
 | | Free | 實測 / 預估 |
 |---|---|---|
-| Workers CPU | 10 ms / 請求（I/O 等待不計） | **實測 p50 5ms，56 次請求 0 錯誤** |
-| Workers subrequest | 50 / 請求（D1 呼叫也算） | 每頁 2~3 次 |
-| Workers 請求 | 10 萬 / 天 | 圖片不走 Worker，只剩 HTML |
-| D1 | 50 queries/invocation、100 params/query、5GB | 遠低於 |
+| Vercel Hobby | 流量與 Function 呼叫有月額度（數字以官方 Limits 頁為準） | 靜態頁 + JSON，圖片不走 Vercel |
+| D1 | 只在本機匯入時用 | — |
 | **Cloudinary** | **25 credits / 月** | 儲存 1.5 + 轉檔 3 + **流量約 20GB** |
+
+Vercel Hobby 限非商業用途，社群活動相簿符合；若之後要掛贊助商或收費，需要重新評估方案。
 
 1 credit = 1GB 儲存 = 1GB 流量 = 1,000 次 transformation，三者共用同一池。**流量是唯一會撞的**：
 一次瀏覽（3 個相簿頁 + 20 張燈箱）約 14MB，20GB 約等於每月 1,400 人次。
 
 超額時 Cloudinary 是通知並限流，不會寄帳單（免費方案沒有綁卡）。這是刻意選的：硬停勝過軟扣款。
-
-MVP 刻意**不開** Workers Cache：開啟後連 `/_nuxt/*` 這些原本免費的 static asset 都會開始計入每日請求額度，而圖片本來就不走 Worker，開了沒有好處。
 
 ## 程式慣例
 
@@ -297,7 +306,7 @@ MVP 刻意**不開** Workers Cache：開啟後連 `/_nuxt/*` 這些原本免費�
 - 自閉合標籤（`<NuxtImg />`）
 - 每行最多 3 個屬性（ESLint 強制）
 - 裝飾性圖片 `alt="" aria-hidden="true"`
-- GSAP 只在 client 載入（`app/plugins/gsap.client.ts`），不進 Worker bundle。捲動進場一律走
+- GSAP 只在 client 載入（`app/plugins/gsap.client.ts`），不進 server bundle。捲動進場一律走
   `useScrollReveal()`。**動畫用 GSAP，但觸發用 `IntersectionObserver`，不要用 ScrollTrigger** ——
   ScrollTrigger 是拿「建立當下算好的捲動座標」比對，而這個照片牆會一直追加項目、座標一直變，
   實測慢捲時會有 6 格已經捲過去卻仍停在 `opacity: 0`，使用者看到的就是「圖片跑不出來」。
@@ -307,7 +316,7 @@ MVP 刻意**不開** Workers Cache：開啟後連 `/_nuxt/*` 這些原本免費�
   用 `useElementVisibility` + `useDocumentVisibility` 控制。
 - 優先用 VueUse 的 composable，不要自己寫 `addEventListener` 與 `onUnmounted` 清理。
 - 品牌 logo 在 `public/brand/`，取自官網 repo 的 `share/nav-logo-*.svg`，並把深藍 `#34495E` 換成 `#ECEFF7` 以適應深色底（綠色 `#41B883` 保留）。要改 logo 請回官網 repo 取原檔再轉，不要手改路徑資料。
-- **不要用 `@nuxt/image`**。URL 規則是自己定的（`shared/utils/photo.ts`），用原生 `<img srcset sizes>`；而且它預設的 IPX provider 依賴 sharp，在 Workers 上跑不起來。
+- **不要用 `@nuxt/image`**。URL 規則是自己定的（`shared/utils/photo.ts`），用原生 `<img srcset sizes>`；而且它預設的 IPX provider 依賴 sharp，而且圖片本來就不該經過我們的伺服器（見第 1 條）。
 
 ## 設計
 

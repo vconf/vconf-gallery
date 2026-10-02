@@ -9,11 +9,13 @@ dist
 node_modules
 *.log
 
-# Cloudflare
+# Vercel
+.vercel
+.env*.local
+
+# Cloudflare（只剩 wrangler 讀 D1 的本機狀態）
 .wrangler
 .dev.vars
-# worker-configuration.d.ts 刻意「不」忽略：它是 binding 的型別來源，
-# 要跟著 wrangler.jsonc 一起進版控（`pnpm cf:typegen` 重新產生）。
 
 # Editor / OS
 .DS_Store
