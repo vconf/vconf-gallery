@@ -40,9 +40,18 @@ onMounted(() => {
 </script>
 
 <template>
-  <NuxtLink
-    :to="href"
-    no-prefetch
+  <!--
+    刻意用原生 <a>，不用 <NuxtLink>。
+
+    NuxtLink（RouterLink）自己的 click handler 排在我們的 @click 前面：它檢查
+    defaultPrevented 時我們還沒 preventDefault，於是自顧自 router.push。導頁因此發生在
+    View Transition **之外** —— 等我們的轉場開始時燈箱早就開了，舊快照裡已經沒有縮圖，
+    形變整個消失。只要點下去到開始轉場之間有任何等待（預抓大圖、payload），就一定輸掉這場競速。
+
+    左鍵由 PhotoWall 的 openPhoto 包在轉場裡導頁；中鍵、⌘／Ctrl 點擊交給瀏覽器開新分頁。
+  -->
+  <a
+    :href="href"
     class="cell"
     :style="{ '--ar': photo.width / photo.height, 'backgroundColor': photo.placeholderColor ?? '#0d1226' }"
     :aria-label="photo.caption ?? '放大檢視照片'"
@@ -78,7 +87,7 @@ onMounted(() => {
       :class="loaded ? 'opacity-100' : 'opacity-0'"
       @load="emit('load', $event)"
     >
-  </NuxtLink>
+  </a>
 </template>
 
 <style scoped>

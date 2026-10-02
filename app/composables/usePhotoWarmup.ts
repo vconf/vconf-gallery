@@ -43,10 +43,53 @@ function saveDataOn(): boolean {
   return Boolean(connection?.saveData)
 }
 
+/**
+ * 點下去之後最多等大圖多久才開始形變。
+ *
+ * 滑過縮圖時通常就已經抓完，這裡是立刻回來的；網路很慢時寧可用墊底縮圖先形變，
+ * 也不要讓點擊之後畫面完全不動。
+ */
+const PRELOAD_TIMEOUT = 800
+
+/** 載完並解碼。decode() 可能永遠不 resolve（見 PhotoWall 的 syncLoaded），所以一定要 race */
+function settle(img: HTMLImageElement): Promise<void> {
+  const loaded = img.complete && img.naturalWidth > 0
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => {
+        img.addEventListener('load', () => resolve(), { once: true })
+        img.addEventListener('error', () => resolve(), { once: true })
+      })
+
+  return Promise.race([
+    loaded.then(() => img.decode()).catch(() => {}),
+    new Promise<void>(resolve => setTimeout(resolve, PRELOAD_TIMEOUT)),
+  ])
+}
+
 export function usePhotoWarmup(cloudName: MaybeRefOrGetter<string>) {
-  const done = new Set<string>()
+  const images = new Map<string, HTMLImageElement>()
   let handle: number | undefined
   let stopped = false
+
+  function request(photoId: string, aspectRatio: number): HTMLImageElement | null {
+    const cloud = toValue(cloudName)
+
+    if (!import.meta.client || !cloud)
+      return null
+
+    const cached = images.get(photoId)
+    if (cached)
+      return cached
+
+    const img = new Image()
+    // 順序要緊：先 sizes、再 srcset，最後才 src
+    img.sizes = lightboxSizes(aspectRatio)
+    img.srcset = lightboxSrcSet(cloud, photoId)
+    img.src = photoUrl(cloud, photoId, 'w1200')
+    images.set(photoId, img)
+
+    return img
+  }
 
   /**
    * 預抓一張燈箱大圖。
@@ -55,17 +98,19 @@ export function usePhotoWarmup(cloudName: MaybeRefOrGetter<string>) {
    * 自己寫死某一階的話，直式照片會猜中、橫式照片會猜錯 —— 而猜錯就等於完全沒預抓。
    */
   function warm(photoId: string, aspectRatio: number) {
-    const cloud = toValue(cloudName)
+    if (import.meta.client && !saveDataOn())
+      request(photoId, aspectRatio)
+  }
 
-    if (!import.meta.client || !cloud || done.has(photoId) || saveDataOn())
-      return
+  /**
+   * 點開前等大圖到手，形變才會落在清晰的大圖上，而不是墊底縮圖。
+   *
+   * 這是點下去「就是它」的意圖，所以不看節省流量 —— 反正燈箱打開也要抓同一張。
+   */
+  function preload(photoId: string, aspectRatio: number): Promise<void> {
+    const img = request(photoId, aspectRatio)
 
-    done.add(photoId)
-    const img = new Image()
-    // 順序要緊：先 sizes、再 srcset，最後才 src
-    img.sizes = lightboxSizes(aspectRatio)
-    img.srcset = lightboxSrcSet(cloud, photoId)
-    img.src = photoUrl(cloud, photoId, 'w1200')
+    return img ? settle(img) : Promise.resolve()
   }
 
   /** 空閒時依序暖前幾張；一次一張，把時間讓回給捲動與解碼 */
@@ -97,5 +142,5 @@ export function usePhotoWarmup(cloudName: MaybeRefOrGetter<string>) {
     cancelIdle(handle)
   })
 
-  return { warm, warmFirst }
+  return { warm, warmFirst, preload }
 }

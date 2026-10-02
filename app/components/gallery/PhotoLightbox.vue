@@ -127,8 +127,16 @@ async function syncReady() {
 }
 
 watch(() => props.photo?.id, () => {
-  ready.value = false
-  void syncReady()
+  /*
+   * 點開前 PhotoWall 已經把大圖抓好並解碼了（usePhotoWarmup 的 preload），
+   * 這時新建的 <img> 會直接命中記憶體快取、同步就是 complete。當下就亮出來，
+   * View Transition 拍新快照時拍到的才是清晰的大圖，而不是墊底縮圖。
+   */
+  const img = imgEl.value
+  ready.value = !!img && img.complete && img.naturalWidth > 0
+
+  if (!ready.value)
+    void syncReady()
 }, { flush: 'post' })
 onMounted(syncReady)
 
@@ -191,12 +199,14 @@ watch(() => props.warmupPhotos, (photos) => {
 <template>
   <Teleport to="body">
     <!--
+      打開時背景淡入 300ms，與官網花絮頁一致：照片本身由 View Transition 形變，
+      背景同時慢慢暗下來，視線才會跟著照片走。
       關閉時淡出 150ms。
       手機上 fixed 疊層一被移除，底下的頁面會整個重繪、網址列也可能跟著回來改變視窗高度，
       直接消失就會看到閃一下；淡出把那一瞬間蓋掉。
     -->
     <Transition
-      enter-active-class="transition-opacity duration-150"
+      enter-active-class="transition-opacity duration-300"
       leave-active-class="transition-opacity duration-150"
       enter-from-class="opacity-0"
       leave-to-class="opacity-0"

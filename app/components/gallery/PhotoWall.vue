@@ -85,28 +85,43 @@ async function warmPayload(photoId: string) {
   }
 }
 
+// 滑過就先抓那一張的燈箱大圖；空閒時再暖前幾張
+const { warm, warmFirst, preload } = usePhotoWarmup(cloudName)
+
+let openToken = 0
+
 /**
  * 點縮圖：先把 view-transition-name 掛上去（舊快照才抓得到這一格），
  * 再在同一個轉場裡導頁。用 `<a>` 的 href 保留中鍵開新分頁與 SEO，所以只攔左鍵。
  */
-async function openPhoto(event: MouseEvent, photoId: string) {
+
+async function openPhoto(event: MouseEvent, photo: PublicPhoto) {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0)
     return
 
   event.preventDefault()
-  morphId.value = photoId
+  const token = ++openToken
+  morphId.value = photo.id
 
-  // 備好才開始轉場（通常在 hover／touchstart 時就備完了，這裡是立刻回來的）
-  await warmPayload(photoId)
+  /*
+   * 大圖到手才開始轉場（通常在 hover／touchstart 時就備完了，這裡是立刻回來的）。
+   * 沒等的話，新快照拍到的是還沒載好的大圖、只有墊底縮圖 —— 形變會落在模糊的圖上，
+   * 結束後才「啪」一下換成清晰的，整個展開的感覺就沒了。
+   */
+  await Promise.all([
+    warmPayload(photo.id),
+    preload(photo.id, photo.width / photo.height),
+  ])
+
+  // 等待期間又點了別張，以最後一次為準
+  if (token !== openToken)
+    return
 
   transition(async () => {
     await nextTick()
-    await navigateTo(`${props.basePath}/${photoId}`)
+    await navigateTo(`${props.basePath}/${photo.id}`)
   })
 }
-
-// 滑過就先抓那一張的燈箱大圖；空閒時再暖前幾張
-const { warm, warmFirst } = usePhotoWarmup(cloudName)
 
 function warmCell(photo: PublicPhoto) {
   warm(photo.id, photo.width / photo.height)
@@ -197,7 +212,7 @@ watch(() => props.photos.length, () => nextTick(syncLoaded))
           :priority="index < 2"
           :loaded="loaded.has(photo.id)"
           :morph="morphName(photo.id) === 'photo'"
-          @open="openPhoto($event, photo.id)"
+          @open="openPhoto($event, photo)"
           @warm="warmCell(photo)"
           @load="markLoaded($event, photo.id)"
           @ready="loaded.add(photo.id)"
@@ -216,7 +231,7 @@ watch(() => props.photos.length, () => nextTick(syncLoaded))
         :priority="index < 2"
         :loaded="loaded.has(photo.id)"
         :morph="morphName(photo.id) === 'photo'"
-        @open="openPhoto($event, photo.id)"
+        @open="openPhoto($event, photo)"
         @warm="warmCell(photo)"
         @load="markLoaded($event, photo.id)"
         @ready="loaded.add(photo.id)"
