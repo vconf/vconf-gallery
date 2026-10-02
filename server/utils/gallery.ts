@@ -53,16 +53,3 @@ export async function albumBySlug(slug: string): Promise<SnapshotAlbum | null> {
 
   return albums.find(album => album.slug === slug) ?? null
 }
-
-/** 預渲染要走過的路徑：首頁、每一本相簿、以及每一張照片（單張分享要有正確的 OG meta） */
-export async function prerenderRoutes(): Promise<string[]> {
-  const albums = await load()
-
-  return [
-    '/',
-    ...albums.flatMap(album => [
-      `/albums/${album.slug}`,
-      ...album.photos.map(photo => `/albums/${album.slug}/${photo.id}`),
-    ]),
-  ]
-}

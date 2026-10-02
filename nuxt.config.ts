@@ -1,21 +1,16 @@
 import { readFileSync } from 'node:fs'
 import tailwindcss from '@tailwindcss/vite'
 
-/** 所有公開網址都走 SSG，包含首頁、相簿與單張照片深連結。 */
+/**
+ * 預渲染首頁與每一本相簿。單張照片的網址刻意不預渲染：每頁都是獨立路由，
+ * 點開燈箱時要多抓該路由的 `_payload.json`，build 產物也會膨脹十幾倍。
+ * 直接開分享連結才落到 Vercel Function 做 SSR，那本來就是唯一需要伺服器算 OG meta 的時機。
+ */
 function galleryRoutes(): string[] {
   try {
-    const albums = JSON.parse(readFileSync('server/assets/gallery.json', 'utf8')) as {
-      slug: string
-      photos: { id: string }[]
-    }[]
+    const albums = JSON.parse(readFileSync('server/assets/gallery.json', 'utf8')) as { slug: string }[]
 
-    return [
-      '/',
-      ...albums.flatMap(album => [
-        `/albums/${album.slug}`,
-        ...album.photos.map(photo => `/albums/${album.slug}/${photo.id}`),
-      ]),
-    ]
+    return ['/', ...albums.map(album => `/albums/${album.slug}`)]
   }
   catch {
     // 快照還沒產生（例如第一次 clone）時就只預渲染首頁，不要讓 build 掛掉
